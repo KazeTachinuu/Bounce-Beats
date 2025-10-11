@@ -1,0 +1,17 @@
+{
+  "name": "music-bounce",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/matter-js": "^0.20.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "matter-js": "^0.20.0",
+    "tone": "^15.1.22"
+  }
+}
