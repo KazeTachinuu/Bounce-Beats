@@ -6,17 +6,43 @@ export class PhysicsEngine {
     constructor() {
         this.engine = Matter.Engine.create();
 
-        // Perfect collision settings
+        // Maximum collision detection settings - AGGRESSIVE anti-tunneling
         this.engine.gravity.y = 0.5;
-        this.engine.positionIterations = 10;
-        this.engine.velocityIterations = 8;
+        this.engine.positionIterations = 20; // Increased from 10 to 20 (very high)
+        this.engine.velocityIterations = 16; // Increased from 8 to 16 (very high)
         this.engine.enableSleeping = false;
 
+        // Tighter constraint solving
+        this.engine.constraintIterations = 4; // Add constraint iterations
+        this.engine.timing.timeScale = 1; // Normal time scale
+
         this.world = this.engine.world;
+
+        // Very small fixed timestep for maximum accuracy
+        this.fixedTimeStep = 1000 / 240; // 240 Hz physics (extremely accurate)
+        this.accumulator = 0;
+        this.maxSubSteps = 4; // Limit substeps to prevent slowdown
     }
 
     update(delta = 1000 / 60) {
-        Matter.Engine.update(this.engine, delta);
+        // Cap delta to prevent death spiral
+        delta = Math.min(delta, 1000 / 30);
+
+        // Fixed timestep physics for consistent collision detection
+        this.accumulator += delta;
+
+        let subSteps = 0;
+        // Run multiple smaller physics steps to prevent tunneling
+        while (this.accumulator >= this.fixedTimeStep && subSteps < this.maxSubSteps) {
+            Matter.Engine.update(this.engine, this.fixedTimeStep);
+            this.accumulator -= this.fixedTimeStep;
+            subSteps++;
+        }
+
+        // Drain accumulator if too many substeps needed
+        if (subSteps >= this.maxSubSteps) {
+            this.accumulator = 0;
+        }
     }
 
     addBody(body) {
@@ -52,21 +78,72 @@ export class Line {
         const centerX = (x1 + x2) / 2;
         const centerY = (y1 + y2) / 2;
 
-        this.body = Matter.Bodies.rectangle(centerX, centerY, this.length, 10, {
+        // Thicker collision body for reliable collision detection
+        // Using 12px thickness - good balance between detection and visual accuracy
+        this.body = Matter.Bodies.rectangle(centerX, centerY, this.length, 12, {
             isStatic: true,
             angle: angle,
             friction: 0,
             frictionStatic: 0,
             frictionAir: 0,
             restitution: 1.0,
-            slop: 0.01,
-            chamfer: { radius: 4 },
-            label: 'line'
+            slop: 0, // No penetration tolerance - strict collision
+            chamfer: { radius: 1 }, // Minimal chamfer for sharp collision edges
+            label: 'line',
+            isSensor: false,
+            collisionFilter: {
+                category: 0x0002,
+                mask: 0xFFFF
+            }
         });
     }
 
     getBody() {
         return this.body;
+    }
+
+    updatePosition(x1, y1, x2, y2) {
+        const oldLength = this.length;
+
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.length = Math.hypot(x2 - x1, y2 - y1);
+
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const centerX = (x1 + x2) / 2;
+        const centerY = (y1 + y2) / 2;
+
+        // Calculate scale factor based on old length
+        const scaleX = oldLength > 0 ? this.length / oldLength : 1;
+
+        // Update position, angle, and scale
+        Matter.Body.setPosition(this.body, { x: centerX, y: centerY });
+        Matter.Body.setAngle(this.body, angle);
+        Matter.Body.scale(this.body, scaleX, 1);
+    }
+
+    distanceToPoint(x, y) {
+        const dx = this.x2 - this.x1;
+        const dy = this.y2 - this.y1;
+        const lengthSq = dx * dx + dy * dy;
+
+        if (lengthSq === 0) return Math.hypot(x - this.x1, y - this.y1);
+
+        const t = Math.max(0, Math.min(1, ((x - this.x1) * dx + (y - this.y1) * dy) / lengthSq));
+        const projX = this.x1 + t * dx;
+        const projY = this.y1 + t * dy;
+
+        return Math.hypot(x - projX, y - projY);
+    }
+
+    distanceToEndpoint(x, y, endpoint) {
+        if (endpoint === 'start') {
+            return Math.hypot(x - this.x1, y - this.y1);
+        } else {
+            return Math.hypot(x - this.x2, y - this.y2);
+        }
     }
 }
 
@@ -86,15 +163,34 @@ export class Ball {
             frictionAir: 0,
             density: 0.002,
             inertia: Infinity,
-            slop: 0.01,
+            slop: 0, // No penetration tolerance - strict collision
             label: 'ball',
-            collisionFilter: { group: -1 } // Balls don't collide with each other
+            collisionFilter: {
+                group: -1, // Balls don't collide with each other
+                category: 0x0001,
+                mask: 0x0002 // Only collide with lines
+            }
         });
+
+        // Set velocity limit to prevent extreme speeds that cause tunneling
+        this.maxSpeed = 15; // Maximum velocity magnitude (reduced from 20)
     }
 
     update() {
         this.trail.push({ x: this.body.position.x, y: this.body.position.y });
         if (this.trail.length > this.maxTrailLength) this.trail.shift();
+
+        // Clamp velocity to prevent tunneling through lines
+        const velocity = this.body.velocity;
+        const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+
+        if (speed > this.maxSpeed) {
+            const scale = this.maxSpeed / speed;
+            Matter.Body.setVelocity(this.body, {
+                x: velocity.x * scale,
+                y: velocity.y * scale
+            });
+        }
     }
 
     getPosition() {

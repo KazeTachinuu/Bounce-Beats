@@ -1,46 +1,72 @@
 /**
- * Game - Main game loop and coordination
+ * Game - Pure coordinator
+ * Orchestrates all subsystems without business logic
  */
-import { PhysicsEngine, Line, Ball } from './physics.js';
+import { PhysicsEngine } from './physics.js';
 import { AudioEngine } from './audio.js';
 import { Renderer } from './renderer.js';
+import { InputController } from './InputController.js';
+import { EntityManager } from './EntityManager.js';
+import { UIManager } from './UIManager.js';
+import { InteractionController } from './InteractionController.js';
 
 export class Game {
     constructor(canvas) {
+        // Core systems
         this.physics = new PhysicsEngine();
         this.audio = new AudioEngine();
         this.renderer = new Renderer(canvas);
 
-        this.lines = [];
-        this.balls = [];
-        this.isDrawing = false;
-        this.currentLine = null;
-        this.collisionCooldowns = new Map();
-        this.isRunning = true;
+        // Managers
+        this.entities = new EntityManager(this.physics);
+        this.ui = new UIManager();
+        this.input = new InputController(canvas);
+        this.interaction = new InteractionController(this.entities, this.ui, this.audio);
 
+        // Game state
+        this.isPaused = false;
+        this.isRunning = true;
+        this.collisionCooldowns = new Map();
+
+        // Wire up interactions
+        this.setupCallbacks();
         this.setupCollisions();
-        this.setupInput(canvas);
         this.animate();
+    }
+
+    // ==================== SETUP ====================
+
+    setupCallbacks() {
+        // Input callbacks
+        this.input.onMouseDown = (pos) => this.interaction.handleMouseDown(pos);
+        this.input.onMouseMove = (pos) => this.interaction.handleMouseMove(pos);
+        this.input.onMouseUp = (event) => this.interaction.handleMouseUp(event);
+        this.input.onKeyPress = (key) => this.interaction.handleKeyPress(key);
+
+        // Pause callback for interaction controller
+        this.interaction.togglePause = () => this.togglePause();
     }
 
     setupCollisions() {
         this.physics.onCollision((event) => {
             event.pairs.forEach((pair) => {
-                const { bodyA, bodyB } = pair;
-                const ball = bodyA.circleRadius ? bodyA : bodyB;
-                const line = ball === bodyA ? bodyB : bodyA;
+                const ballBody = pair.bodyA.circleRadius ? pair.bodyA : pair.bodyB;
+                const lineBody = ballBody === pair.bodyA ? pair.bodyB : pair.bodyA;
 
-                if (ball.circleRadius && line.isStatic) {
-                    const ballObj = this.balls.find(b => b.getBody() === ball);
-                    const lineObj = this.lines.find(l => l.getBody() === line);
-                    if (ballObj && lineObj) this.handleCollision(ballObj, lineObj);
+                if (ballBody.circleRadius && lineBody.isStatic) {
+                    this.handleCollision(ballBody, lineBody);
                 }
             });
         });
     }
 
-    handleCollision(ball, line) {
-        const key = `${ball.getBody().id}-${line.getBody().id}`;
+    handleCollision(ballBody, lineBody) {
+        const ball = this.entities.getBallAtBody(ballBody);
+        const line = this.entities.getLineAtBody(lineBody);
+        if (!ball || !line) return;
+
+        // Collision cooldown
+        const key = `${ballBody.id}-${lineBody.id}`;
         const now = Date.now();
         const last = this.collisionCooldowns.get(key) || 0;
 
@@ -55,118 +81,76 @@ export class Game {
         }
     }
 
-    setupInput(canvas) {
-        canvas.addEventListener('mousedown', (e) => {
-            this.startDrawing(e.clientX, e.clientY);
-            this.audio.init();
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            this.updateDrawing(e.clientX, e.clientY);
-        });
-
-        canvas.addEventListener('mouseup', (e) => {
-            this.stopDrawing();
-            if (!this.isDrawing) {
-                this.spawnBall(e.clientX, e.clientY);
-            }
-        });
-
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            this.startDrawing(touch.clientX, touch.clientY);
-            this.audio.init();
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            this.updateDrawing(touch.clientX, touch.clientY);
-        });
-
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.stopDrawing();
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'c') {
-                this.clear();
-            }
-        });
-    }
-
-    startDrawing(x, y) {
-        this.isDrawing = true;
-        this.currentLine = { x1: x, y1: y, x2: x, y2: y };
-    }
-
-    updateDrawing(x, y) {
-        if (this.isDrawing && this.currentLine) {
-            this.currentLine.x2 = x;
-            this.currentLine.y2 = y;
-        }
-    }
-
-    stopDrawing() {
-        if (this.isDrawing && this.currentLine) {
-            const length = Math.hypot(
-                this.currentLine.x2 - this.currentLine.x1,
-                this.currentLine.y2 - this.currentLine.y1
-            );
-
-            if (length > 15) {
-                const line = new Line(
-                    this.currentLine.x1,
-                    this.currentLine.y1,
-                    this.currentLine.x2,
-                    this.currentLine.y2
-                );
-
-                this.lines.push(line);
-                this.physics.addBody(line.getBody());
-            }
-
-            this.currentLine = null;
-            this.isDrawing = false;
-        }
-    }
-
-    spawnBall(x, y) {
-        if (!this.isDrawing) {
-            const ball = new Ball(x, y);
-            this.balls.push(ball);
-            this.physics.addBody(ball.getBody());
-        }
-    }
-
-    clear() {
-        this.lines.forEach(line => this.physics.removeBody(line.getBody()));
-        this.balls.forEach(ball => this.physics.removeBody(ball.getBody()));
-        this.lines = [];
-        this.balls = [];
-        this.collisionCooldowns.clear();
-    }
+    // ==================== GAME LOOP ====================
 
     update() {
-        this.physics.update();
-        this.balls.forEach(ball => ball.update());
+        if (this.isPaused) return;
 
-        for (let i = this.balls.length - 1; i >= 0; i--) {
-            if (this.balls[i].isOffScreen(this.renderer.getHeight())) {
-                this.physics.removeBody(this.balls[i].getBody());
-                this.balls.splice(i, 1);
-            }
-        }
+        // Update physics and entities
+        this.physics.update();
+        this.entities.updateBalls();
+        this.entities.updateSpawners(Date.now());
+        this.entities.removeOffScreenBalls(this.renderer.getHeight());
+
+        // Update interactions
+        this.interaction.update(this.input.mouse);
     }
 
     render() {
         this.renderer.clear();
-        this.lines.forEach(line => this.renderer.drawLine(line));
-        if (this.isDrawing) this.renderer.drawCurrentLine(this.currentLine);
+
+        // Render lines
+        this.entities.lines.forEach(line => {
+            const isHovered = line === this.ui.hovered.line;
+            const isSelected = line === this.ui.selected.line;
+            this.renderer.drawLine(line, isHovered, isSelected);
+        });
+
+        // Render drawing preview
+        const drawing = this.interaction.getDrawing();
+        if (drawing) {
+            this.renderer.drawCurrentLine(drawing, this.input.mouse.x, this.input.mouse.y);
+        }
+
+        // Render effects and balls
         this.renderer.updateAndDrawFlashes();
-        this.balls.forEach(ball => this.renderer.drawBall(ball));
+        this.entities.balls.forEach(ball => this.renderer.drawBall(ball));
+
+        // Render spawners
+        this.entities.spawners.forEach(spawner => {
+            const isHovered = spawner === this.ui.hovered.spawner;
+            this.renderer.drawSpawner(spawner, isHovered);
+        });
+
+        // Render endpoint handles
+        const dragging = this.interaction.getDragging();
+        if (dragging) {
+            this.renderer.drawEndpoints(dragging.line);
+        } else if (this.ui.hovered.endpoint && !this.ui.selected.line) {
+            this.renderer.drawEndpoints(this.ui.hovered.endpoint.line);
+        }
+
+        // Render delete button
+        if (this.ui.selected.line) {
+            const midX = (this.ui.selected.line.x1 + this.ui.selected.line.x2) / 2;
+            const midY = (this.ui.selected.line.y1 + this.ui.selected.line.y2) / 2;
+            const bounds = this.renderer.drawDeleteButton(midX, midY, this.input.mouse.x, this.input.mouse.y);
+            this.ui.setDeleteButton(bounds);
+        } else {
+            this.ui.setDeleteButton(null);
+        }
+
+        // Render overlays
+        if (this.isPaused) {
+            this.renderer.drawPauseOverlay();
+        }
+
+        if (this.ui.shouldShowHelp()) {
+            this.renderer.drawHelp(this.ui.getHelpAlpha());
+        }
+
+        // Update cursor
+        this.input.setCursor(this.ui.getCursor());
     }
 
     animate() {
@@ -176,9 +160,15 @@ export class Game {
         requestAnimationFrame(() => this.animate());
     }
 
+    // ==================== GAME CONTROL ====================
+
+    togglePause() {
+        this.isPaused = !this.isPaused;
+    }
+
     destroy() {
         this.isRunning = false;
-        this.clear();
+        this.entities.clear();
         this.physics.destroy();
         this.audio.dispose();
         this.renderer.destroy();

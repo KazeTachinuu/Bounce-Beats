@@ -43,8 +43,8 @@ export class AudioEngine {
     playNote(lineLength, impactSpeed) {
         if (!this.isInitialized) return;
 
-        const notes = ['A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4'];
-        const noteIndex = Math.floor(Math.min(lineLength / 600, 1) * (notes.length - 1));
+        const notes = ['A1', 'C2', 'D2', 'E2', 'G2', 'A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
+        const noteIndex = Math.floor(Math.min(lineLength / 1200, 1) * (notes.length - 1));
         const note = notes[noteIndex];
 
         const detune = (Math.random() - 0.5) * 10;
