@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: bounce-beats
+    runtime: bun
+    buildCommand: bun install
+    startCommand: bun index.ts
+    envVars:
+      - key: PORT
+        value: 3000
