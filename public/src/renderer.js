@@ -118,12 +118,15 @@ export class Renderer {
         // Draw length and note preview
         const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
         const notes = ['A1', 'C2', 'D2', 'E2', 'G2', 'A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
+
+        // Use fixed reference size (1200px) regardless of window size
+        // This ensures same pixel length = same note, even after resize
         const noteIndex = Math.floor(Math.min(length / 1200, 1) * (notes.length - 1));
         const note = notes[noteIndex];
 
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         this.ctx.font = '12px monospace';
-        this.ctx.fillText(`${Math.round(length)}px - ${note}`, mouseX + 15, mouseY - 10);
+        this.ctx.fillText(`${Math.round(length)}px → ${note}`, mouseX + 15, mouseY - 10);
     }
 
     drawEndpoints(line) {
