@@ -149,6 +149,13 @@ export class Game {
             this.renderer.drawHelp(this.ui.getHelpAlpha());
         }
 
+        // Render stats (always visible)
+        this.renderer.drawStats(
+            this.entities.balls.length,
+            this.entities.lines.length,
+            this.entities.spawners.length
+        );
+
         // Update cursor
         this.input.setCursor(this.ui.getCursor());
     }

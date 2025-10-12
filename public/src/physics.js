@@ -103,8 +103,6 @@ export class Line {
     }
 
     updatePosition(x1, y1, x2, y2) {
-        const oldLength = this.length;
-
         this.x1 = x1;
         this.y1 = y1;
         this.x2 = x2;
@@ -115,13 +113,30 @@ export class Line {
         const centerX = (x1 + x2) / 2;
         const centerY = (y1 + y2) / 2;
 
-        // Calculate scale factor based on old length
-        const scaleX = oldLength > 0 ? this.length / oldLength : 1;
+        // Recreate the body with new dimensions to avoid scaling issues
+        // Store old body properties
+        const oldBody = this.body;
 
-        // Update position, angle, and scale
-        Matter.Body.setPosition(this.body, { x: centerX, y: centerY });
-        Matter.Body.setAngle(this.body, angle);
-        Matter.Body.scale(this.body, scaleX, 1);
+        // Create new body with correct dimensions
+        this.body = Matter.Bodies.rectangle(centerX, centerY, this.length, 12, {
+            isStatic: true,
+            angle: angle,
+            friction: 0,
+            frictionStatic: 0,
+            frictionAir: 0,
+            restitution: 1.0,
+            slop: 0,
+            chamfer: { radius: 1 },
+            label: 'line',
+            isSensor: false,
+            collisionFilter: {
+                category: 0x0002,
+                mask: 0xFFFF
+            }
+        });
+
+        // Return both old and new body so EntityManager can swap them in the world
+        return { oldBody, newBody: this.body };
     }
 
     distanceToPoint(x, y) {

@@ -192,6 +192,72 @@ export class Renderer {
         this.ctx.textAlign = 'left';
     }
 
+    drawStats(ballCount, lineCount, spawnerCount) {
+        const padding = 20;
+        const x = window.innerWidth - padding;
+        const y = padding;
+        const lineHeight = 22;
+
+        // Background panel with subtle gradient
+        const panelWidth = 140;
+        const panelHeight = 85;
+        const panelX = x - panelWidth;
+
+        // Semi-transparent background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        this.ctx.beginPath();
+        this.ctx.roundRect(panelX, y, panelWidth, panelHeight, 8);
+        this.ctx.fill();
+
+        // Border glow
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.roundRect(panelX, y, panelWidth, panelHeight, 8);
+        this.ctx.stroke();
+
+        // Title
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.font = 'bold 11px monospace';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('STATS', panelX + 12, y + 18);
+
+        // Stats with icons and colors
+        this.ctx.font = '14px monospace';
+
+        // Lines (white)
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        this.ctx.fillText('━', panelX + 12, y + 38);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.ctx.fillText(`Lines:`, panelX + 28, y + 38);
+        this.ctx.fillStyle = '#fff';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(lineCount.toString(), x - 12, y + 38);
+
+        // Balls (cyan)
+        this.ctx.textAlign = 'left';
+        this.ctx.fillStyle = 'rgba(100, 200, 255, 0.9)';
+        this.ctx.fillText('●', panelX + 12, y + 58);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.ctx.fillText(`Balls:`, panelX + 28, y + 58);
+        this.ctx.fillStyle = 'rgba(100, 200, 255, 1)';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(ballCount.toString(), x - 12, y + 58);
+
+        // Spawners (green)
+        this.ctx.textAlign = 'left';
+        this.ctx.fillStyle = 'rgba(100, 255, 150, 0.9)';
+        this.ctx.fillText('◉', panelX + 12, y + 78);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.ctx.fillText(`Spawn:`, panelX + 28, y + 78);
+        this.ctx.fillStyle = 'rgba(100, 255, 150, 1)';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(spawnerCount.toString(), x - 12, y + 78);
+
+        // Reset text alignment
+        this.ctx.textAlign = 'left';
+    }
+
     drawPauseOverlay() {
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         this.ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);

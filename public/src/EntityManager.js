@@ -70,10 +70,15 @@ export class EntityManager {
     }
 
     updateLineEndpoint(line, endpoint, x, y) {
-        if (endpoint === 'start') {
-            line.updatePosition(x, y, line.x2, line.y2);
-        } else {
-            line.updatePosition(line.x1, line.y1, x, y);
+        // Update line position and get new body
+        const result = endpoint === 'start'
+            ? line.updatePosition(x, y, line.x2, line.y2)
+            : line.updatePosition(line.x1, line.y1, x, y);
+
+        // Swap bodies in physics world
+        if (result) {
+            this.physics.removeBody(result.oldBody);
+            this.physics.addBody(result.newBody);
         }
     }
 
