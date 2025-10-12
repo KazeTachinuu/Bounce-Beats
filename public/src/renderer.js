@@ -180,6 +180,21 @@ export class Renderer {
         }
     }
 
+    drawLineInfo(line, mouseX, mouseY) {
+        if (!line) return;
+
+        // Calculate line length and note
+        const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+        const notes = ['A1', 'C2', 'D2', 'E2', 'G2', 'A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
+        const noteIndex = Math.floor(Math.min(length / 1200, 1) * (notes.length - 1));
+        const note = notes[noteIndex];
+
+        // Draw info near mouse cursor
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.ctx.font = '12px monospace';
+        this.ctx.fillText(`${Math.round(length)}px → ${note}`, mouseX + 15, mouseY - 10);
+    }
+
     drawHelp(alpha = 1) {
         this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.3})`;
         this.ctx.font = '13px monospace';

@@ -126,6 +126,8 @@ export class Game {
         const dragging = this.interaction.getDragging();
         if (dragging) {
             this.renderer.drawEndpoints(dragging.line);
+            // Show line length/note info while dragging
+            this.renderer.drawLineInfo(dragging.line, this.input.mouse.x, this.input.mouse.y);
         } else if (this.ui.hovered.endpoint && !this.ui.selected.line) {
             this.renderer.drawEndpoints(this.ui.hovered.endpoint.line);
         }
