@@ -38,4 +38,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🎵 Music Bounce running at http://localhost:${server.port}`);
+console.log(`🎵 Bounce Beats running at http://localhost:${server.port}`);

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Music Bounce is an interactive music creation game built with vanilla JavaScript, Matter.js physics engine, and Tone.js audio synthesis. Users draw lines and spawn balls that bounce and create lo-fi melodies on impact.
+Bounce Beats is an interactive music creation game built with vanilla JavaScript, Matter.js physics engine, and Tone.js audio synthesis. Users draw lines and spawn balls that bounce and create lo-fi melodies on impact.
 
 ## Development Commands
 

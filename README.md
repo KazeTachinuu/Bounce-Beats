@@ -1,4 +1,4 @@
-# Music Bounce
+# Bounce Beats
 
 Simple, satisfying music creation game. Draw lines, bounce balls, create lo-fi melodies.
 

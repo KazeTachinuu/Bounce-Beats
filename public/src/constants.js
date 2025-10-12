@@ -1,5 +1,5 @@
 /**
- * Music Bounce - Shared Constants
+ * Bounce Beats - Shared Constants
  * Single source of truth for musical configuration
  */
 
