@@ -3,6 +3,7 @@
  * Single place to add/remove/find/update entities
  */
 import { Line, Ball } from './physics.js';
+import { ENTITY_CONFIG } from './constants.js';
 
 export class EntityManager {
     constructor(physics) {
@@ -13,11 +14,27 @@ export class EntityManager {
         this.spawners = [];
 
         this.config = {
-            maxSpawners: 5,
-            spawnerInterval: 1500,
-            ballSprayInterval: 150,
-            minLineLength: 15
+            maxSpawners: ENTITY_CONFIG.maxSpawners,
+            spawnerInterval: ENTITY_CONFIG.spawnerIntervalMs,
+            ballSprayInterval: ENTITY_CONFIG.ballSprayIntervalMs,
+            minLineLength: ENTITY_CONFIG.minLineLength
         };
+    }
+
+    // ==================== PRIVATE HELPERS ====================
+
+    _removeFromArray(array, item) {
+        const index = array.indexOf(item);
+        if (index > -1) {
+            array.splice(index, 1);
+            return true;
+        }
+        return false;
+    }
+
+    _clearPhysicsEntities(array) {
+        array.forEach(entity => this.physics.removeBody(entity.getBody()));
+        return [];
     }
 
     // ==================== LINES ====================
@@ -35,8 +52,7 @@ export class EntityManager {
     removeLine(line) {
         if (!line) return;
         this.physics.removeBody(line.getBody());
-        const index = this.lines.indexOf(line);
-        if (index > -1) this.lines.splice(index, 1);
+        this._removeFromArray(this.lines, line);
     }
 
     removeLastLine() {
@@ -46,8 +62,7 @@ export class EntityManager {
     }
 
     clearLines() {
-        this.lines.forEach(line => this.physics.removeBody(line.getBody()));
-        this.lines = [];
+        this.lines = this._clearPhysicsEntities(this.lines);
     }
 
     findNearestLine(x, y, threshold) {
@@ -82,6 +97,17 @@ export class EntityManager {
         }
     }
 
+    updateLinePosition(line, x1, y1, x2, y2) {
+        // Update entire line position
+        const result = line.updatePosition(x1, y1, x2, y2);
+
+        // Swap bodies in physics world
+        if (result) {
+            this.physics.removeBody(result.oldBody);
+            this.physics.addBody(result.newBody);
+        }
+    }
+
     // ==================== BALLS ====================
 
     addBall(x, y) {
@@ -92,14 +118,13 @@ export class EntityManager {
     }
 
     removeBall(ball) {
+        if (!ball) return;
         this.physics.removeBody(ball.getBody());
-        const index = this.balls.indexOf(ball);
-        if (index > -1) this.balls.splice(index, 1);
+        this._removeFromArray(this.balls, ball);
     }
 
     clearBalls() {
-        this.balls.forEach(ball => this.physics.removeBody(ball.getBody()));
-        this.balls = [];
+        this.balls = this._clearPhysicsEntities(this.balls);
     }
 
     updateBalls() {
@@ -124,8 +149,8 @@ export class EntityManager {
     }
 
     removeSpawner(spawner) {
-        const index = this.spawners.indexOf(spawner);
-        if (index > -1) this.spawners.splice(index, 1);
+        if (!spawner) return;
+        this._removeFromArray(this.spawners, spawner);
     }
 
     clearSpawners() {

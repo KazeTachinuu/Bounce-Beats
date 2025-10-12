@@ -18,11 +18,17 @@ export class UIManager {
 
         // UI elements
         this.deleteButton = null;
+        this.helpIcon = null;
 
         // Help overlay
         this.help = {
             visible: true,
             showTime: Date.now()
+        };
+
+        // Stats panel
+        this.stats = {
+            visible: true
         };
     }
 
@@ -74,6 +80,22 @@ export class UIManager {
                y >= btn.y && y <= btn.y + btn.height;
     }
 
+    // ==================== HELP ICON ====================
+
+    setHelpIcon(bounds) {
+        this.helpIcon = bounds;
+    }
+
+    isPointInHelpIcon(x, y) {
+        if (!this.helpIcon) return false;
+        const icon = this.helpIcon;
+        const centerX = icon.x + icon.width / 2;
+        const centerY = icon.y + icon.height / 2;
+        const radius = icon.width / 2;
+        const distance = Math.hypot(x - centerX, y - centerY);
+        return distance <= radius;
+    }
+
     // ==================== HELP ====================
 
     toggleHelp() {
@@ -81,10 +103,25 @@ export class UIManager {
         this.help.showTime = Date.now();
     }
 
+    toggleStats() {
+        this.stats.visible = !this.stats.visible;
+    }
+
+    shouldShowStats() {
+        return this.stats.visible;
+    }
+
     shouldShowHelp() {
         if (!this.help.visible) return false;
         const elapsed = Date.now() - this.help.showTime;
-        return elapsed < 5000;
+        const isVisible = elapsed < 5000;
+
+        // Auto-hide when fade completes
+        if (!isVisible && this.help.visible) {
+            this.help.visible = false;
+        }
+
+        return isVisible;
     }
 
     getHelpAlpha() {

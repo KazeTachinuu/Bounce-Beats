@@ -1,15 +1,25 @@
 /**
  * Renderer - Canvas drawing and visual effects
  */
+import { getNoteFromLength } from './constants.js';
+
 export class Renderer {
     constructor(canvas) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d', { alpha: false });
+        this.ctx = canvas.getContext('2d', {
+            alpha: false,
+            desynchronized: true  // Hint to browser for better performance
+        });
         this.impactFlashes = [];
 
         this.resize();
         this.resizeHandler = () => this.resize();
         window.addEventListener('resize', this.resizeHandler);
+    }
+
+    resetTextStyle() {
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
     }
 
     resize() {
@@ -98,8 +108,7 @@ export class Renderer {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText('Delete', x, y - 31);
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'alphabetic';
+        this.resetTextStyle();
 
         return { x: btnX, y: btnY, width: btnWidth, height: btnHeight };
     }
@@ -116,17 +125,7 @@ export class Renderer {
         this.ctx.stroke();
 
         // Draw length and note preview
-        const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
-        const notes = ['A1', 'C2', 'D2', 'E2', 'G2', 'A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
-
-        // Use fixed reference size (1200px) regardless of window size
-        // This ensures same pixel length = same note, even after resize
-        const noteIndex = Math.floor(Math.min(length / 1200, 1) * (notes.length - 1));
-        const note = notes[noteIndex];
-
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.font = '12px monospace';
-        this.ctx.fillText(`${Math.round(length)}px → ${note}`, mouseX + 15, mouseY - 10);
+        this.drawLineInfo(line, mouseX + 15, mouseY - 10);
     }
 
     drawEndpoints(line) {
@@ -139,8 +138,8 @@ export class Renderer {
         this.ctx.fill();
     }
 
-    drawSpawner(spawner, isHovered = false) {
-        const pulse = Math.sin(Date.now() / 300) * 0.2 + 0.8;
+    drawSpawner(spawner, isHovered = false, timestamp = performance.now()) {
+        const pulse = Math.sin(timestamp / 300) * 0.2 + 0.8;
         const scale = isHovered ? 1.15 : 1;
 
         // Hover glow
@@ -176,104 +175,271 @@ export class Renderer {
             this.ctx.font = '11px monospace';
             this.ctx.textAlign = 'center';
             this.ctx.fillText('Click to remove', spawner.x, spawner.y + 30);
-            this.ctx.textAlign = 'left';
+            this.resetTextStyle();
         }
     }
 
-    drawLineInfo(line, mouseX, mouseY) {
+    drawLineInfo(line, x, y) {
         if (!line) return;
 
         // Calculate line length and note
         const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
-        const notes = ['A1', 'C2', 'D2', 'E2', 'G2', 'A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
-        const noteIndex = Math.floor(Math.min(length / 1200, 1) * (notes.length - 1));
-        const note = notes[noteIndex];
+        const note = getNoteFromLength(length);
 
-        // Draw info near mouse cursor
+        // Draw info at specified position
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         this.ctx.font = '12px monospace';
-        this.ctx.fillText(`${Math.round(length)}px → ${note}`, mouseX + 15, mouseY - 10);
+        this.ctx.fillText(`${Math.round(length)}px → ${note}`, x, y);
     }
 
     drawHelp(alpha = 1) {
-        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.3})`;
-        this.ctx.font = '13px monospace';
-        this.ctx.textAlign = 'center';
-
         const centerX = window.innerWidth / 2;
-        const y = 30;
+        const centerY = window.innerHeight / 2;
 
-        this.ctx.fillText('Drag: draw • Click: ball • Hold: spray/spawner', centerX, y);
-        this.ctx.fillText('Click line: select • Delete button: remove • Backspace: undo • Drag endpoints: edit', centerX, y + 20);
-        this.ctx.fillText('Space: pause • X: clear balls • C: clear all • H: toggle help', centerX, y + 40);
+        // Panel dimensions - Apple-style centered modal
+        const panelWidth = 600;
+        const panelHeight = 440;
+        const panelX = centerX - panelWidth / 2;
+        const panelY = centerY - panelHeight / 2;
+        const contentPadding = 48;
 
-        this.ctx.textAlign = 'left';
-    }
+        // Outer shadow (depth)
+        this.ctx.shadowColor = `rgba(0, 0, 0, ${alpha * 0.5})`;
+        this.ctx.shadowBlur = 50;
+        this.ctx.shadowOffsetY = 20;
 
-    drawStats(ballCount, lineCount, spawnerCount) {
-        const padding = 20;
-        const x = window.innerWidth - padding;
-        const y = padding;
-        const lineHeight = 22;
-
-        // Background panel with subtle gradient
-        const panelWidth = 140;
-        const panelHeight = 85;
-        const panelX = x - panelWidth;
-
-        // Semi-transparent background
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        // Main panel background (dark with slight transparency)
+        this.ctx.fillStyle = `rgba(18, 18, 18, ${alpha * 0.96})`;
         this.ctx.beginPath();
-        this.ctx.roundRect(panelX, y, panelWidth, panelHeight, 8);
+        this.ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 20);
         this.ctx.fill();
 
-        // Border glow
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        // Clear shadow
+        this.ctx.shadowColor = 'transparent';
+        this.ctx.shadowBlur = 0;
+        this.ctx.shadowOffsetY = 0;
+
+        // Subtle border
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.15})`;
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
-        this.ctx.roundRect(panelX, y, panelWidth, panelHeight, 8);
+        this.ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 20);
         this.ctx.stroke();
 
+        // Header section
+        const headerY = panelY + contentPadding;
+
         // Title
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+        this.ctx.font = '600 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
+        this.resetTextStyle();
+        this.ctx.textBaseline = 'top';
+        this.ctx.fillText('Keyboard Shortcuts', panelX + contentPadding, headerY);
+
+        // Subtitle
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.55})`;
+        this.ctx.font = '400 15px -apple-system, BlinkMacSystemFont, sans-serif';
+        this.ctx.fillText('Create music by drawing lines and bouncing balls', panelX + contentPadding, headerY + 38);
+
+        // Divider line
+        const dividerY = headerY + 72;
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.12})`;
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(panelX + contentPadding, dividerY);
+        this.ctx.lineTo(panelX + panelWidth - contentPadding, dividerY);
+        this.ctx.stroke();
+
+        // Helper to draw keyboard key (dark theme)
+        const drawKey = (text, x, y) => {
+            const keyPadding = 12;
+            const keyHeight = 32;
+            this.ctx.font = '500 13px -apple-system, "SF Mono", monospace';
+            const metrics = this.ctx.measureText(text);
+            const keyWidth = Math.max(metrics.width + keyPadding * 2, 44);
+            const radius = 6;
+
+            // Key background (subtle gray on dark)
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.08})`;
+            this.ctx.beginPath();
+            this.ctx.roundRect(x, y, keyWidth, keyHeight, radius);
+            this.ctx.fill();
+
+            // Key border
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.2})`;
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.roundRect(x, y, keyWidth, keyHeight, radius);
+            this.ctx.stroke();
+
+            // Key text
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+            this.ctx.font = '500 13px -apple-system, "SF Mono", monospace';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(text, x + keyWidth / 2, y + keyHeight / 2);
+
+            return keyWidth;
+        };
+
+        // Helper to draw shortcut row
+        const drawShortcut = (keys, description, x, y) => {
+            let currentX = x;
+
+            // Draw keys with "or" separator
+            const keyArray = Array.isArray(keys) ? keys : [keys];
+            keyArray.forEach((key, i) => {
+                const keyWidth = drawKey(key, currentX, y);
+                currentX += keyWidth + 8;
+
+                if (i < keyArray.length - 1) {
+                    this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.4})`;
+                    this.ctx.font = '400 13px -apple-system, sans-serif';
+                    this.resetTextStyle();
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText('or', currentX, y + 16);
+                    currentX += 26;
+                }
+            });
+
+            // Description
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.85})`;
+            this.ctx.font = '400 15px -apple-system, sans-serif';
+            this.resetTextStyle();
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(description, currentX + 8, y + 16);
+        };
+
+        // Content sections with grid layout
+        const contentY = dividerY + 32;
+        const col1X = panelX + contentPadding;
+        const col2X = panelX + panelWidth / 2 + 8;
+        const rowHeight = 48;
+
+        // Left column - Drawing
+        let y = contentY;
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.45})`;
+        this.ctx.font = '600 12px -apple-system, sans-serif';
+        this.resetTextStyle();
+        this.ctx.textBaseline = 'top';
+        this.ctx.fillText('DRAWING', col1X, y);
+        y += 28;
+
+        drawShortcut('Click', 'Spawn ball', col1X, y);
+        y += rowHeight;
+        drawShortcut('Drag', 'Draw line', col1X, y);
+        y += rowHeight;
+        drawShortcut('Hold', 'Spray / spawner', col1X, y);
+
+        // Right column - Controls
+        y = contentY;
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.45})`;
+        this.ctx.font = '600 12px -apple-system, sans-serif';
+        this.ctx.fillText('CONTROLS', col2X, y);
+        y += 28;
+
+        drawShortcut('Space', 'Pause', col2X, y);
+        y += rowHeight;
+        drawShortcut([['Del', 'C']], 'Clear all', col2X, y);
+        y += rowHeight;
+        drawShortcut('X', 'Clear balls', col2X, y);
+        y += rowHeight;
+        drawShortcut([['H', 'T']], 'Help / Stats', col2X, y);
+
+        // Footer
+        const footerY = panelY + panelHeight - contentPadding + 8;
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.35})`;
+        this.ctx.font = '400 13px -apple-system, sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'bottom';
+        this.ctx.fillText('Press H to close', centerX, footerY);
+
+        // Reset
+        this.resetTextStyle();
+    }
+
+    drawStats(ballCount, lineCount, spawnerCount, fps) {
+        const padding = 16;
+        const x = window.innerWidth - padding;
+        const y = padding;
+
+        // Minimal design
+        const panelWidth = 110;
+        const panelHeight = 90;
+        const panelX = x - panelWidth;
+
+        // Clean background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        this.ctx.fillRect(panelX, y, panelWidth, panelHeight);
+
+        // Subtle border
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(panelX, y, panelWidth, panelHeight);
+
+        // Draw help icon button (bottom-left of stats panel)
+        const iconSize = 24;
+        const iconPadding = 10;
+        const helpIconX = panelX + iconPadding;
+        const helpIconY = y + panelHeight + iconPadding;
+
+        this.drawHelpIcon(helpIconX, helpIconY, iconSize);
+
+        // Return bounds for click detection
+        this.helpIconBounds = {
+            x: helpIconX,
+            y: helpIconY,
+            width: iconSize,
+            height: iconSize
+        };
+
+        // Clean typography
+        this.ctx.font = '12px monospace';
+        this.resetTextStyle();
+
+        const leftX = panelX + 12;
+        const rightX = x - 12;
+        let currentY = y + 22;
+
+        // Lines
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        this.ctx.font = 'bold 11px monospace';
-        this.ctx.textAlign = 'left';
-        this.ctx.fillText('STATS', panelX + 12, y + 18);
-
-        // Stats with icons and colors
-        this.ctx.font = '14px monospace';
-
-        // Lines (white)
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        this.ctx.fillText('━', panelX + 12, y + 38);
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.fillText(`Lines:`, panelX + 28, y + 38);
-        this.ctx.fillStyle = '#fff';
+        this.ctx.fillText('Lines', leftX, currentY);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(lineCount.toString(), x - 12, y + 38);
+        this.ctx.fillText(lineCount.toString(), rightX, currentY);
 
-        // Balls (cyan)
-        this.ctx.textAlign = 'left';
-        this.ctx.fillStyle = 'rgba(100, 200, 255, 0.9)';
-        this.ctx.fillText('●', panelX + 12, y + 58);
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.fillText(`Balls:`, panelX + 28, y + 58);
-        this.ctx.fillStyle = 'rgba(100, 200, 255, 1)';
+        currentY += 20;
+
+        // Balls
+        this.resetTextStyle();
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.fillText('Balls', leftX, currentY);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(ballCount.toString(), x - 12, y + 58);
+        this.ctx.fillText(ballCount.toString(), rightX, currentY);
 
-        // Spawners (green)
-        this.ctx.textAlign = 'left';
-        this.ctx.fillStyle = 'rgba(100, 255, 150, 0.9)';
-        this.ctx.fillText('◉', panelX + 12, y + 78);
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.fillText(`Spawn:`, panelX + 28, y + 78);
-        this.ctx.fillStyle = 'rgba(100, 255, 150, 1)';
+        currentY += 20;
+
+        // Spawners
+        this.resetTextStyle();
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.fillText('Spawn', leftX, currentY);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(spawnerCount.toString(), x - 12, y + 78);
+        this.ctx.fillText(spawnerCount.toString(), rightX, currentY);
 
-        // Reset text alignment
-        this.ctx.textAlign = 'left';
+        currentY += 20;
+
+        // FPS
+        this.resetTextStyle();
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.fillText('FPS', leftX, currentY);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(fps > 0 ? fps.toString() : '--', rightX, currentY);
+
+        // Reset
+        this.resetTextStyle();
     }
 
     drawPauseOverlay() {
@@ -284,16 +450,17 @@ export class Renderer {
         this.ctx.font = '20px monospace';
         this.ctx.textAlign = 'center';
         this.ctx.fillText('PAUSED', window.innerWidth / 2, window.innerHeight / 2);
-        this.ctx.textAlign = 'left';
+        this.resetTextStyle();
     }
 
     drawBall(ball) {
         const pos = ball.getPosition();
         const trail = ball.getTrail();
+        const trailLength = trail.length;
 
-        // Draw trail
-        for (let i = 0; i < trail.length; i++) {
-            const progress = i / trail.length;
+        // Draw trail (batch beginPath calls)
+        for (let i = 0; i < trailLength; i++) {
+            const progress = i / trailLength;
             this.ctx.fillStyle = `rgba(255, 255, 255, ${progress * 0.4})`;
             this.ctx.beginPath();
             this.ctx.arc(trail[i].x, trail[i].y, progress * ball.radius, 0, Math.PI * 2);
@@ -321,6 +488,49 @@ export class Renderer {
             flash.draw(this.ctx);
             if (flash.isDead()) this.impactFlashes.splice(i, 1);
         }
+    }
+
+    drawHelpIcon(x, y, size) {
+        const centerX = x + size / 2;
+        const centerY = y + size / 2;
+        const radius = size / 2;
+
+        // Outer glow for visibility
+        this.ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.shadowBlur = 8;
+
+        // Background circle with gradient
+        const gradient = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        gradient.addColorStop(0, 'rgba(40, 40, 40, 0.95)');
+        gradient.addColorStop(1, 'rgba(20, 20, 20, 0.95)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Reset shadow
+        this.ctx.shadowBlur = 0;
+
+        // Border with subtle highlight
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        // Question mark with better font
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        this.ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('?', centerX, centerY + 1);
+
+        // Reset
+        this.resetTextStyle();
+    }
+
+    getHelpIconBounds() {
+        return this.helpIconBounds || null;
     }
 
     getHeight() {

@@ -1,6 +1,8 @@
 /**
  * Audio Engine - Tone.js wrapper for lo-fi music generation
  */
+import { getNoteFromLength } from './constants.js';
+
 export class AudioEngine {
     constructor() {
         this.isInitialized = false;
@@ -43,10 +45,7 @@ export class AudioEngine {
     playNote(lineLength, impactSpeed) {
         if (!this.isInitialized) return;
 
-        const notes = ['A1', 'C2', 'D2', 'E2', 'G2', 'A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
-        const noteIndex = Math.floor(Math.min(lineLength / 1200, 1) * (notes.length - 1));
-        const note = notes[noteIndex];
-
+        const note = getNoteFromLength(lineLength);
         const detune = (Math.random() - 0.5) * 10;
         const velocity = Math.min(Math.pow(impactSpeed / 12, 0.5) * 0.5 + 0.15, 1);
         const duration = Math.random() * 0.1 + 0.3;

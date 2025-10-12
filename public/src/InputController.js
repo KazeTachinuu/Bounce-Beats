@@ -2,6 +2,8 @@
  * InputController - Handles all user input
  * Single source of truth for mouse/keyboard/touch state
  */
+import { INTERACTION_CONFIG } from './constants.js';
+
 export class InputController {
     constructor(canvas) {
         this.canvas = canvas;
@@ -32,10 +34,16 @@ export class InputController {
         this.onKeyPress = null;
     }
 
-    handleMouseDown(e) {
+    getCanvasCoordinates(e) {
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    }
+
+    handleMouseDown(e) {
+        const { x, y } = this.getCanvasCoordinates(e);
 
         this.mouse.isDown = true;
         this.mouse.downTime = Date.now();
@@ -48,9 +56,7 @@ export class InputController {
     }
 
     handleMouseMove(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const { x, y } = this.getCanvasCoordinates(e);
 
         this.mouse.x = x;
         this.mouse.y = y;
@@ -61,9 +67,7 @@ export class InputController {
     }
 
     handleMouseUp(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const { x, y } = this.getCanvasCoordinates(e);
 
         const holdDuration = Date.now() - this.mouse.downTime;
 
@@ -74,8 +78,8 @@ export class InputController {
                 downX: this.mouse.downX,
                 downY: this.mouse.downY,
                 holdDuration,
-                isClick: holdDuration < 200,
-                isHold: holdDuration >= 500
+                isClick: holdDuration < INTERACTION_CONFIG.clickThreshold,
+                isHold: holdDuration >= INTERACTION_CONFIG.holdThreshold
             });
         }
 
@@ -85,7 +89,6 @@ export class InputController {
     handleTouchStart(e) {
         e.preventDefault();
         const touch = e.touches[0];
-        const rect = this.canvas.getBoundingClientRect();
         this.handleMouseDown({
             clientX: touch.clientX,
             clientY: touch.clientY
@@ -103,10 +106,10 @@ export class InputController {
 
     handleTouchEnd(e) {
         e.preventDefault();
-        const rect = this.canvas.getBoundingClientRect();
+        // Reuse current mouse position (already in canvas coordinates)
         this.handleMouseUp({
-            clientX: this.mouse.x + rect.left,
-            clientY: this.mouse.y + rect.top
+            clientX: this.mouse.x + this.canvas.getBoundingClientRect().left,
+            clientY: this.mouse.y + this.canvas.getBoundingClientRect().top
         });
     }
 

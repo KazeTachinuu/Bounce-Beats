@@ -9,6 +9,7 @@ import { InputController } from './InputController.js';
 import { EntityManager } from './EntityManager.js';
 import { UIManager } from './UIManager.js';
 import { InteractionController } from './InteractionController.js';
+import { COLLISION_CONFIG } from './constants.js';
 
 export class Game {
     constructor(canvas) {
@@ -27,6 +28,13 @@ export class Game {
         this.isPaused = false;
         this.isRunning = true;
         this.collisionCooldowns = new Map();
+        this.lastCooldownCleanup = 0;
+
+        // FPS counter
+        this.fps = 0;
+        this.frameCount = 0;
+        this.lastFpsUpdate = performance.now();
+        this.lastFrameTime = performance.now();
 
         // Wire up interactions
         this.setupCallbacks();
@@ -67,15 +75,15 @@ export class Game {
 
         // Collision cooldown
         const key = `${ballBody.id}-${lineBody.id}`;
-        const now = Date.now();
+        const now = this.lastFrameTime;
         const last = this.collisionCooldowns.get(key) || 0;
 
-        if (now - last > 70) {
+        if (now - last > COLLISION_CONFIG.cooldownMs) {
             const speed = ball.getVelocity();
-            if (speed > 0.3) {
+            if (speed > COLLISION_CONFIG.minSpeedForSound) {
                 this.audio.playNote(line.length, speed);
                 const pos = ball.getPosition();
-                this.renderer.addImpactFlash(pos.x, pos.y, Math.min(speed / 8, 1));
+                this.renderer.addImpactFlash(pos.x, pos.y, Math.min(speed / COLLISION_CONFIG.flashIntensityDivisor, 1));
                 this.collisionCooldowns.set(key, now);
             }
         }
@@ -83,13 +91,13 @@ export class Game {
 
     // ==================== GAME LOOP ====================
 
-    update() {
+    update(timestamp) {
         if (this.isPaused) return;
 
         // Update physics and entities
         this.physics.update();
         this.entities.updateBalls();
-        this.entities.updateSpawners(Date.now());
+        this.entities.updateSpawners(timestamp);
         this.entities.removeOffScreenBalls(this.renderer.getHeight());
 
         // Update interactions
@@ -119,15 +127,19 @@ export class Game {
         // Render spawners
         this.entities.spawners.forEach(spawner => {
             const isHovered = spawner === this.ui.hovered.spawner;
-            this.renderer.drawSpawner(spawner, isHovered);
+            this.renderer.drawSpawner(spawner, isHovered, this.lastFrameTime);
         });
 
         // Render endpoint handles
         const dragging = this.interaction.getDragging();
+        const showingHelp = this.ui.shouldShowHelp();
+
         if (dragging) {
             this.renderer.drawEndpoints(dragging.line);
-            // Show line length/note info while dragging
-            this.renderer.drawLineInfo(dragging.line, this.input.mouse.x, this.input.mouse.y);
+            // Show line length/note info while dragging (unless help is showing for all lines)
+            if (!showingHelp) {
+                this.renderer.drawLineInfo(dragging.line, this.input.mouse.x, this.input.mouse.y);
+            }
         } else if (this.ui.hovered.endpoint && !this.ui.selected.line) {
             this.renderer.drawEndpoints(this.ui.hovered.endpoint.line);
         }
@@ -149,14 +161,30 @@ export class Game {
 
         if (this.ui.shouldShowHelp()) {
             this.renderer.drawHelp(this.ui.getHelpAlpha());
+            // Show line info for all lines when help is visible
+            this.entities.lines.forEach(line => {
+                const midX = (line.x1 + line.x2) / 2;
+                const midY = (line.y1 + line.y2) / 2;
+                this.renderer.drawLineInfo(line, midX, midY);
+            });
         }
 
-        // Render stats (always visible)
-        this.renderer.drawStats(
-            this.entities.balls.length,
-            this.entities.lines.length,
-            this.entities.spawners.length
-        );
+        // Render stats (if visible)
+        if (this.ui.shouldShowStats()) {
+            this.renderer.drawStats(
+                this.entities.balls.length,
+                this.entities.lines.length,
+                this.entities.spawners.length,
+                this.fps
+            );
+            // Update help icon bounds for click detection
+            const helpIconBounds = this.renderer.getHelpIconBounds();
+            if (helpIconBounds) {
+                this.ui.setHelpIcon(helpIconBounds);
+            }
+        } else {
+            this.ui.setHelpIcon(null);
+        }
 
         // Update cursor
         this.input.setCursor(this.ui.getCursor());
@@ -164,7 +192,30 @@ export class Game {
 
     animate() {
         if (!this.isRunning) return;
-        this.update();
+
+        // Single timestamp for entire frame
+        this.lastFrameTime = performance.now();
+
+        // Calculate FPS
+        this.frameCount++;
+        if (this.lastFrameTime - this.lastFpsUpdate >= 1000) {
+            this.fps = Math.round(this.frameCount * 1000 / (this.lastFrameTime - this.lastFpsUpdate));
+            this.frameCount = 0;
+            this.lastFpsUpdate = this.lastFrameTime;
+        }
+
+        // Cleanup collision cooldowns every 5 seconds to prevent memory leak
+        if (this.lastFrameTime - this.lastCooldownCleanup > 5000) {
+            const threshold = this.lastFrameTime - 1000;
+            for (const [key, time] of this.collisionCooldowns) {
+                if (time < threshold) {
+                    this.collisionCooldowns.delete(key);
+                }
+            }
+            this.lastCooldownCleanup = this.lastFrameTime;
+        }
+
+        this.update(this.lastFrameTime);
         this.render();
         requestAnimationFrame(() => this.animate());
     }

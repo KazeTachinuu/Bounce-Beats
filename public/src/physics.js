@@ -2,26 +2,28 @@
  * Physics Engine - Matter.js wrapper
  * Handles physics simulation and collision detection
  */
+import { COLLISION_FILTERS, PHYSICS_CONFIG } from './constants.js';
+
 export class PhysicsEngine {
     constructor() {
         this.engine = Matter.Engine.create();
 
         // Maximum collision detection settings - AGGRESSIVE anti-tunneling
-        this.engine.gravity.y = 0.5;
-        this.engine.positionIterations = 20; // Increased from 10 to 20 (very high)
-        this.engine.velocityIterations = 16; // Increased from 8 to 16 (very high)
+        this.engine.gravity.y = PHYSICS_CONFIG.gravity;
+        this.engine.positionIterations = PHYSICS_CONFIG.positionIterations;
+        this.engine.velocityIterations = PHYSICS_CONFIG.velocityIterations;
         this.engine.enableSleeping = false;
 
         // Tighter constraint solving
-        this.engine.constraintIterations = 4; // Add constraint iterations
+        this.engine.constraintIterations = PHYSICS_CONFIG.constraintIterations;
         this.engine.timing.timeScale = 1; // Normal time scale
 
         this.world = this.engine.world;
 
         // Very small fixed timestep for maximum accuracy
-        this.fixedTimeStep = 1000 / 240; // 240 Hz physics (extremely accurate)
+        this.fixedTimeStep = 1000 / PHYSICS_CONFIG.fixedTimeStepHz;
         this.accumulator = 0;
-        this.maxSubSteps = 4; // Limit substeps to prevent slowdown
+        this.maxSubSteps = PHYSICS_CONFIG.maxSubSteps;
     }
 
     update(delta = 1000 / 60) {
@@ -67,6 +69,22 @@ export class PhysicsEngine {
  * Line - Drawable line that balls bounce off
  */
 export class Line {
+    static createBodyConfig(angle) {
+        return {
+            isStatic: true,
+            angle: angle,
+            friction: 0,
+            frictionStatic: 0,
+            frictionAir: 0,
+            restitution: 1.0,
+            slop: 0, // No penetration tolerance - strict collision
+            chamfer: { radius: 1 }, // Minimal chamfer for sharp collision edges
+            label: 'line',
+            isSensor: false,
+            collisionFilter: COLLISION_FILTERS.LINE
+        };
+    }
+
     constructor(x1, y1, x2, y2) {
         this.x1 = x1;
         this.y1 = y1;
@@ -80,22 +98,10 @@ export class Line {
 
         // Thicker collision body for reliable collision detection
         // Using 12px thickness - good balance between detection and visual accuracy
-        this.body = Matter.Bodies.rectangle(centerX, centerY, this.length, 12, {
-            isStatic: true,
-            angle: angle,
-            friction: 0,
-            frictionStatic: 0,
-            frictionAir: 0,
-            restitution: 1.0,
-            slop: 0, // No penetration tolerance - strict collision
-            chamfer: { radius: 1 }, // Minimal chamfer for sharp collision edges
-            label: 'line',
-            isSensor: false,
-            collisionFilter: {
-                category: 0x0002,
-                mask: 0xFFFF
-            }
-        });
+        this.body = Matter.Bodies.rectangle(
+            centerX, centerY, this.length, PHYSICS_CONFIG.lineThickness,
+            Line.createBodyConfig(angle)
+        );
     }
 
     getBody() {
@@ -114,26 +120,13 @@ export class Line {
         const centerY = (y1 + y2) / 2;
 
         // Recreate the body with new dimensions to avoid scaling issues
-        // Store old body properties
         const oldBody = this.body;
 
         // Create new body with correct dimensions
-        this.body = Matter.Bodies.rectangle(centerX, centerY, this.length, 12, {
-            isStatic: true,
-            angle: angle,
-            friction: 0,
-            frictionStatic: 0,
-            frictionAir: 0,
-            restitution: 1.0,
-            slop: 0,
-            chamfer: { radius: 1 },
-            label: 'line',
-            isSensor: false,
-            collisionFilter: {
-                category: 0x0002,
-                mask: 0xFFFF
-            }
-        });
+        this.body = Matter.Bodies.rectangle(
+            centerX, centerY, this.length, PHYSICS_CONFIG.lineThickness,
+            Line.createBodyConfig(angle)
+        );
 
         // Return both old and new body so EntityManager can swap them in the world
         return { oldBody, newBody: this.body };
@@ -180,15 +173,11 @@ export class Ball {
             inertia: Infinity,
             slop: 0, // No penetration tolerance - strict collision
             label: 'ball',
-            collisionFilter: {
-                group: -1, // Balls don't collide with each other
-                category: 0x0001,
-                mask: 0x0002 // Only collide with lines
-            }
+            collisionFilter: COLLISION_FILTERS.BALL
         });
 
         // Set velocity limit to prevent extreme speeds that cause tunneling
-        this.maxSpeed = 15; // Maximum velocity magnitude (reduced from 20)
+        this.maxSpeed = PHYSICS_CONFIG.maxBallSpeed;
     }
 
     update() {
