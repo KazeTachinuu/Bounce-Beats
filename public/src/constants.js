@@ -65,11 +65,12 @@ export const PHYSICS_CONFIG = {
 
 /**
  * Interaction thresholds and timings
+ * Touch targets are larger for mobile-friendly interaction
  */
 export const INTERACTION_CONFIG = {
-    lineHoverThreshold: 15,       // px
-    spawnerHoverThreshold: 25,    // px
-    endpointHoverThreshold: 20,   // px
+    lineHoverThreshold: 25,       // px (increased for touch)
+    spawnerHoverThreshold: 35,    // px (increased for touch)
+    endpointHoverThreshold: 30,   // px (increased for touch)
     minDragDistance: 10,          // px before line is created
     holdThreshold: 500,           // ms to activate hold
     clickThreshold: 200,          // ms max for click

@@ -16,7 +16,7 @@ export class PhysicsEngine {
 
         // Tighter constraint solving
         this.engine.constraintIterations = PHYSICS_CONFIG.constraintIterations;
-        this.engine.timing.timeScale = 1; // Normal time scale
+        this.engine.timing.timeScale = 2; // 2x speed for faster gameplay
 
         this.world = this.engine.world;
 

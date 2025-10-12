@@ -81,10 +81,10 @@ export class Renderer {
     }
 
     drawDeleteButton(x, y, mouseX, mouseY) {
-        const btnWidth = 80;
-        const btnHeight = 28;
+        const btnWidth = 100;  // Larger for touch
+        const btnHeight = 40;  // Larger for touch
         const btnX = x - btnWidth / 2;
-        const btnY = y - 45;
+        const btnY = y - 50;
 
         const isHovered = mouseX >= btnX && mouseX <= btnX + btnWidth &&
                          mouseY >= btnY && mouseY <= btnY + btnHeight;
@@ -104,10 +104,10 @@ export class Renderer {
 
         // Button text
         this.ctx.fillStyle = '#fff';
-        this.ctx.font = 'bold 13px monospace';
+        this.ctx.font = 'bold 16px monospace';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Delete', x, y - 31);
+        this.ctx.fillText('Delete', x, y - 30);
         this.resetTextStyle();
 
         return { x: btnX, y: btnY, width: btnWidth, height: btnHeight };

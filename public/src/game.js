@@ -91,11 +91,11 @@ export class Game {
 
     // ==================== GAME LOOP ====================
 
-    update(timestamp) {
+    update(timestamp, delta) {
         if (this.isPaused) return;
 
         // Update physics and entities
-        this.physics.update();
+        this.physics.update(delta);
         this.entities.updateBalls();
         this.entities.updateSpawners(timestamp);
         this.entities.removeOffScreenBalls(this.renderer.getHeight());
@@ -193,8 +193,10 @@ export class Game {
     animate() {
         if (!this.isRunning) return;
 
-        // Single timestamp for entire frame
-        this.lastFrameTime = performance.now();
+        // Calculate delta time
+        const now = performance.now();
+        const delta = now - this.lastFrameTime;
+        this.lastFrameTime = now;
 
         // Calculate FPS
         this.frameCount++;
@@ -215,7 +217,7 @@ export class Game {
             this.lastCooldownCleanup = this.lastFrameTime;
         }
 
-        this.update(this.lastFrameTime);
+        this.update(this.lastFrameTime, delta);
         this.render();
         requestAnimationFrame(() => this.animate());
     }
