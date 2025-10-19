@@ -1,43 +1,30 @@
-/**
- * EntityManager - Manages all game entities (lines, balls, spawners)
- * Single place to add/remove/find/update entities
- */
 import { Line, Ball } from './physics.js';
 import { ENTITY_CONFIG } from './constants.js';
 
 export class EntityManager {
     constructor(physics) {
         this.physics = physics;
-
         this.lines = [];
         this.balls = [];
         this.spawners = [];
-
+        this.welcomeBalls = [];
+        this.welcomeLines = [];
         this.config = {
             maxSpawners: ENTITY_CONFIG.maxSpawners,
             spawnerInterval: ENTITY_CONFIG.spawnerIntervalMs,
-            ballSprayInterval: ENTITY_CONFIG.ballSprayIntervalMs,
             minLineLength: ENTITY_CONFIG.minLineLength
         };
     }
 
-    // ==================== PRIVATE HELPERS ====================
-
     _removeFromArray(array, item) {
         const index = array.indexOf(item);
-        if (index > -1) {
-            array.splice(index, 1);
-            return true;
-        }
-        return false;
+        if (index > -1) array.splice(index, 1);
     }
 
     _clearPhysicsEntities(array) {
         array.forEach(entity => this.physics.removeBody(entity.getBody()));
         return [];
     }
-
-    // ==================== LINES ====================
 
     addLine(x1, y1, x2, y2) {
         const length = Math.hypot(x2 - x1, y2 - y1);
@@ -85,12 +72,9 @@ export class EntityManager {
     }
 
     updateLineEndpoint(line, endpoint, x, y) {
-        // Update line position and get new body
         const result = endpoint === 'start'
             ? line.updatePosition(x, y, line.x2, line.y2)
             : line.updatePosition(line.x1, line.y1, x, y);
-
-        // Swap bodies in physics world
         if (result) {
             this.physics.removeBody(result.oldBody);
             this.physics.addBody(result.newBody);
@@ -98,17 +82,12 @@ export class EntityManager {
     }
 
     updateLinePosition(line, x1, y1, x2, y2) {
-        // Update entire line position
         const result = line.updatePosition(x1, y1, x2, y2);
-
-        // Swap bodies in physics world
         if (result) {
             this.physics.removeBody(result.oldBody);
             this.physics.addBody(result.newBody);
         }
     }
-
-    // ==================== BALLS ====================
 
     addBall(x, y) {
         const ball = new Ball(x, y);
@@ -175,8 +154,6 @@ export class EntityManager {
         });
     }
 
-    // ==================== GLOBAL ====================
-
     clear() {
         this.clearLines();
         this.clearBalls();
@@ -184,10 +161,72 @@ export class EntityManager {
     }
 
     getBallAtBody(body) {
-        return this.balls.find(b => b.getBody() === body);
+        const ball = this.balls.find(b => b.getBody() === body);
+        if (ball) return ball;
+        if (this.welcomeBalls.length > 0) {
+            return this.welcomeBalls.find(b => b.getBody() === body);
+        }
+        return null;
     }
 
     getLineAtBody(body) {
-        return this.lines.find(l => l.getBody() === body);
+        const line = this.lines.find(l => l.getBody() === body);
+        if (line) return line;
+        if (this.welcomeLines.length > 0) {
+            return this.welcomeLines.find(l => l.getBody() === body);
+        }
+        return null;
+    }
+
+    createWelcomeBalls(positions) {
+        this.clearWelcomeBalls();
+        positions.forEach(pos => {
+            const ball = new Ball(pos.x, pos.y);
+            const body = ball.getBody();
+            Matter.Body.setStatic(body, true);
+            ball.letterIndex = pos.letterIndex || 0;
+            this.welcomeBalls.push(ball);
+            this.physics.addBody(body);
+        });
+    }
+
+    createWelcomeLines(y) {
+        const margin = 50;
+        const tilt = 60;
+        const line1 = new Line(margin, y - tilt, window.innerWidth - margin, y + tilt);
+        const line2 = new Line(margin, y + tilt, window.innerWidth - margin, y - tilt);
+        this.welcomeLines.push(line1, line2);
+        this.physics.addBody(line1.getBody());
+        this.physics.addBody(line2.getBody());
+    }
+
+    startWelcomeBallsFall() {
+        this.welcomeFallStartTime = Date.now();
+    }
+
+    updateWelcomeBallsFall() {
+        if (!this.welcomeFallStartTime) return;
+        const elapsed = Date.now() - this.welcomeFallStartTime;
+        const letterDelay = 80;
+        this.welcomeBalls.forEach(ball => {
+            const body = ball.getBody();
+            if (body.isStatic && elapsed >= ball.letterIndex * letterDelay) {
+                Matter.Body.setStatic(body, false);
+            }
+        });
+    }
+
+    clearWelcomeBalls() {
+        this.welcomeBalls.forEach(ball => this.physics.removeBody(ball.getBody()));
+        this.welcomeBalls = [];
+    }
+
+    clearWelcomeLines() {
+        this.welcomeLines.forEach(line => this.physics.removeBody(line.getBody()));
+        this.welcomeLines = [];
+    }
+
+    clearWelcomeScreen() {
+        this.clearWelcomeLines();
     }
 }

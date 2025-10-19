@@ -3,12 +3,23 @@
  * Single place for all "what happens when user does X" logic
  */
 import { INTERACTION_CONFIG } from './constants.js';
+import { CommandHistory } from './CommandHistory.js';
+import {
+    AddLineCommand,
+    RemoveLineCommand,
+    MoveLineCommand,
+    MoveLineEndpointCommand,
+    AddSpawnerCommand,
+    RemoveSpawnerCommand,
+    ClearAllCommand
+} from './commands.js';
 
 export class InteractionController {
     constructor(entities, ui, audio) {
         this.entities = entities;
         this.ui = ui;
         this.audio = audio;
+        this.history = new CommandHistory();
 
         // Drawing state
         this.drawing = {
@@ -26,7 +37,12 @@ export class InteractionController {
             endpoint: null,
             type: null, // 'endpoint' or 'line'
             offsetX: 0,
-            offsetY: 0
+            offsetY: 0,
+            // Store initial position for undo
+            initialX1: 0,
+            initialY1: 0,
+            initialX2: 0,
+            initialY2: 0
         };
 
         // Ball spray state
@@ -38,6 +54,13 @@ export class InteractionController {
     handleMouseDown(pos) {
         this.audio.init();
 
+        // Priority 0: Start game if welcome screen is showing
+        if (this.ui.isWelcomeShowingTitle()) {
+            this.ui.startGame();
+            this.entities.startWelcomeBallsFall();
+            return;
+        }
+
         // Priority 1: Help icon
         if (this.ui.isPointInHelpIcon(pos.x, pos.y)) {
             this.ui.toggleHelp();
@@ -47,7 +70,10 @@ export class InteractionController {
         // Priority 2: Delete button
         if (this.ui.isPointInDeleteButton(pos.x, pos.y)) {
             const line = this.ui.getSelectedLine();
-            if (line) this.entities.removeLine(line);
+            if (line) {
+                const cmd = new RemoveLineCommand(this.entities, line);
+                this.history.execute(cmd);
+            }
             this.ui.deselectLine();
             return;
         }
@@ -55,7 +81,8 @@ export class InteractionController {
         // Priority 2: Remove spawner
         const spawner = this.ui.hovered.spawner;
         if (spawner) {
-            this.entities.removeSpawner(spawner);
+            const cmd = new RemoveSpawnerCommand(this.entities, spawner);
+            this.history.execute(cmd);
             this.ui.setHoveredSpawner(null);
             return;
         }
@@ -67,6 +94,11 @@ export class InteractionController {
             this.dragging.type = 'endpoint';
             this.dragging.line = endpoint.line;
             this.dragging.endpoint = endpoint.endpoint;
+            // Store initial position for undo
+            this.dragging.initialX1 = endpoint.line.x1;
+            this.dragging.initialY1 = endpoint.line.y1;
+            this.dragging.initialX2 = endpoint.line.x2;
+            this.dragging.initialY2 = endpoint.line.y2;
             return;
         }
 
@@ -76,6 +108,12 @@ export class InteractionController {
             this.dragging.active = true;
             this.dragging.type = 'line';
             this.dragging.line = line;
+
+            // Store initial position for undo
+            this.dragging.initialX1 = line.x1;
+            this.dragging.initialY1 = line.y1;
+            this.dragging.initialX2 = line.x2;
+            this.dragging.initialY2 = line.y2;
 
             // Calculate offset from mouse to line center
             const centerX = (line.x1 + line.x2) / 2;
@@ -151,6 +189,59 @@ export class InteractionController {
     handleMouseUp(event) {
         // Finish dragging
         if (this.dragging.active) {
+            const line = this.dragging.line;
+            const finalX1 = line.x1;
+            const finalY1 = line.y1;
+            const finalX2 = line.x2;
+            const finalY2 = line.y2;
+
+            // Only create undo command if position actually changed
+            const moved = finalX1 !== this.dragging.initialX1 ||
+                         finalY1 !== this.dragging.initialY1 ||
+                         finalX2 !== this.dragging.initialX2 ||
+                         finalY2 !== this.dragging.initialY2;
+
+            if (moved) {
+                // Create command with old position from drag start
+                let cmd;
+                if (this.dragging.type === 'endpoint') {
+                    cmd = new MoveLineEndpointCommand(
+                        this.entities,
+                        line,
+                        this.dragging.endpoint,
+                        this.dragging.endpoint === 'start' ? finalX1 : finalX2,
+                        this.dragging.endpoint === 'start' ? finalY1 : finalY2
+                    );
+                    // Override old position with initial position (before drag started)
+                    cmd.oldX = this.dragging.endpoint === 'start' ? this.dragging.initialX1 : this.dragging.initialX2;
+                    cmd.oldY = this.dragging.endpoint === 'start' ? this.dragging.initialY1 : this.dragging.initialY2;
+                } else if (this.dragging.type === 'line') {
+                    cmd = new MoveLineCommand(
+                        this.entities,
+                        line,
+                        finalX1,
+                        finalY1,
+                        finalX2,
+                        finalY2
+                    );
+                    // Override old position with initial position (before drag started)
+                    cmd.oldX1 = this.dragging.initialX1;
+                    cmd.oldY1 = this.dragging.initialY1;
+                    cmd.oldX2 = this.dragging.initialX2;
+                    cmd.oldY2 = this.dragging.initialY2;
+                }
+
+                // Add to history (command already executed during drag)
+                // Don't use execute() since the action already happened
+                this.history.undoStack.push(cmd);
+                this.history.redoStack = [];
+
+                // Enforce max history size
+                if (this.history.undoStack.length > this.history.maxHistorySize) {
+                    this.history.undoStack.shift();
+                }
+            }
+
             this.dragging.active = false;
             this.dragging.line = null;
             this.dragging.endpoint = null;
@@ -184,9 +275,10 @@ export class InteractionController {
 
         // Hold = create spawner
         if (event.isHold) {
-            this.entities.addSpawner(event.x, event.y);
+            const cmd = new AddSpawnerCommand(this.entities, event.x, event.y);
+            this.history.execute(cmd);
         }
-        // Click = spawn ball
+        // Click = spawn ball (don't track individual balls for undo)
         else if (event.isClick) {
             this.entities.addBall(event.x, event.y);
         }
@@ -194,16 +286,39 @@ export class InteractionController {
 
     // ==================== KEYBOARD ====================
 
-    handleKeyPress(key) {
+    handleKeyPress(key, ctrlKey, metaKey, shiftKey) {
+        // Handle Ctrl+Z (undo) and Ctrl+Y or Ctrl+Shift+Z (redo)
+        const cmdKey = ctrlKey || metaKey; // Support both Ctrl and Cmd (Mac)
+
+        if (cmdKey && key.toLowerCase() === 'z') {
+            if (shiftKey) {
+                // Ctrl+Shift+Z = redo
+                this.history.redo();
+            } else {
+                // Ctrl+Z = undo
+                this.history.undo();
+            }
+            return;
+        }
+
+        if (cmdKey && key.toLowerCase() === 'y') {
+            // Ctrl+Y = redo
+            this.history.redo();
+            return;
+        }
+
         // Normalize key to lowercase for consistent handling
         const normalizedKey = key.toLowerCase();
 
         const handlers = {
-            'c': () => this.clearLinesAndSpawners(),
+            'c': () => {
+                const cmd = new ClearAllCommand(this.entities);
+                this.history.execute(cmd);
+            },
             'delete': () => this.handleDeleteKey(),
             'x': () => this.entities.clearBalls(),
             ' ': () => this.togglePause?.(),
-            'backspace': () => this.entities.removeLastLine(),
+            'backspace': () => this.handleBackspace(),
             'escape': () => this.ui.deselectLine(),
             'h': () => this.ui.toggleHelp(),
             't': () => this.ui.toggleStats()
@@ -214,18 +329,27 @@ export class InteractionController {
     }
 
     clearLinesAndSpawners() {
-        this.entities.clearLines();
-        this.entities.clearSpawners();
+        const cmd = new ClearAllCommand(this.entities);
+        this.history.execute(cmd);
     }
 
     handleDeleteKey() {
         const line = this.ui.getSelectedLine();
         if (line) {
-            this.entities.removeLine(line);
+            const cmd = new RemoveLineCommand(this.entities, line);
+            this.history.execute(cmd);
             this.ui.deselectLine();
         } else {
-            this.clearLinesAndSpawners();
+            const cmd = new ClearAllCommand(this.entities);
+            this.history.execute(cmd);
         }
+    }
+
+    handleBackspace() {
+        if (this.entities.lines.length === 0) return;
+        const lastLine = this.entities.lines[this.entities.lines.length - 1];
+        const cmd = new RemoveLineCommand(this.entities, lastLine);
+        this.history.execute(cmd);
     }
 
     // ==================== HELPERS ====================
@@ -233,12 +357,14 @@ export class InteractionController {
     finishDrawing() {
         if (!this.drawing.active) return;
 
-        this.entities.addLine(
+        const cmd = new AddLineCommand(
+            this.entities,
             this.drawing.x1,
             this.drawing.y1,
             this.drawing.x2,
             this.drawing.y2
         );
+        this.history.execute(cmd);
 
         this.drawing.active = false;
     }
