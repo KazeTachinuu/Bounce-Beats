@@ -11,6 +11,8 @@ import {
     MoveLineEndpointCommand,
     AddSpawnerCommand,
     RemoveSpawnerCommand,
+    MoveMultipleCommand,
+    ScaleMultipleCommand,
     ClearAllCommand
 } from './commands.js';
 
@@ -42,11 +44,16 @@ export class InteractionController {
             startY: 0,
             initialBounds: null,
             resizeHandle: null,
-            // Store initial position for undo
+            // Store initial position for undo (single line)
             initialX1: 0,
             initialY1: 0,
             initialX2: 0,
-            initialY2: 0
+            initialY2: 0,
+            // Store cumulative delta for multi-selection undo
+            totalDeltaX: 0,
+            totalDeltaY: 0,
+            // Store original bounds for resize undo
+            originalBounds: null
         };
 
         // Ball spray state
@@ -112,6 +119,7 @@ export class InteractionController {
                 this.dragging.startX = pos.x;
                 this.dragging.startY = pos.y;
                 this.dragging.initialBounds = { ...this.ui.multiSelectionBounds.bounds };
+                this.dragging.originalBounds = { ...this.ui.multiSelectionBounds.bounds };
                 return;
             }
 
@@ -126,6 +134,8 @@ export class InteractionController {
                     this.dragging.type = 'multiple';
                     this.dragging.startX = pos.x;
                     this.dragging.startY = pos.y;
+                    this.dragging.totalDeltaX = 0;
+                    this.dragging.totalDeltaY = 0;
                     return;
                 }
             }
@@ -234,6 +244,10 @@ export class InteractionController {
                 const multi = this.ui.getSelectedMultiple();
                 this.entities.moveMultiple(multi.lines, multi.spawners, deltaX, deltaY);
 
+                // Accumulate total delta for undo
+                this.dragging.totalDeltaX += deltaX;
+                this.dragging.totalDeltaY += deltaY;
+
                 this.dragging.startX = pos.x;
                 this.dragging.startY = pos.y;
             } else if (this.dragging.type === 'resize') {
@@ -304,48 +318,77 @@ export class InteractionController {
 
         // Finish dragging
         if (this.dragging.active) {
-            const line = this.dragging.line;
-            const finalX1 = line.x1;
-            const finalY1 = line.y1;
-            const finalX2 = line.x2;
-            const finalY2 = line.y2;
+            let cmd = null;
 
-            // Only create undo command if position actually changed
-            const moved = finalX1 !== this.dragging.initialX1 ||
-                         finalY1 !== this.dragging.initialY1 ||
-                         finalX2 !== this.dragging.initialX2 ||
-                         finalY2 !== this.dragging.initialY2;
-
-            if (moved) {
-                // Create command with old position from drag start
-                let cmd;
-                if (this.dragging.type === 'endpoint') {
-                    cmd = new MoveLineEndpointCommand(
+            if (this.dragging.type === 'multiple') {
+                // Multi-selection move - create undo command if moved
+                const moved = Math.abs(this.dragging.totalDeltaX) > 0.1 || Math.abs(this.dragging.totalDeltaY) > 0.1;
+                if (moved) {
+                    const multi = this.ui.getSelectedMultiple();
+                    cmd = new MoveMultipleCommand(
                         this.entities,
-                        line,
-                        this.dragging.endpoint,
-                        this.dragging.endpoint === 'start' ? finalX1 : finalX2,
-                        this.dragging.endpoint === 'start' ? finalY1 : finalY2
+                        multi.lines,
+                        multi.spawners,
+                        this.dragging.totalDeltaX,
+                        this.dragging.totalDeltaY
                     );
-                    // Override old position with initial position (before drag started)
-                    cmd.oldX = this.dragging.endpoint === 'start' ? this.dragging.initialX1 : this.dragging.initialX2;
-                    cmd.oldY = this.dragging.endpoint === 'start' ? this.dragging.initialY1 : this.dragging.initialY2;
-                } else if (this.dragging.type === 'line') {
-                    cmd = new MoveLineCommand(
-                        this.entities,
-                        line,
-                        finalX1,
-                        finalY1,
-                        finalX2,
-                        finalY2
-                    );
-                    // Override old position with initial position (before drag started)
-                    cmd.oldX1 = this.dragging.initialX1;
-                    cmd.oldY1 = this.dragging.initialY1;
-                    cmd.oldX2 = this.dragging.initialX2;
-                    cmd.oldY2 = this.dragging.initialY2;
                 }
+            } else if (this.dragging.type === 'resize') {
+                // Multi-selection resize - create undo command
+                const multi = this.ui.getSelectedMultiple();
+                cmd = new ScaleMultipleCommand(
+                    this.entities,
+                    multi.lines,
+                    multi.spawners,
+                    this.dragging.originalBounds,
+                    this.dragging.initialBounds // Final bounds after resize
+                );
+            } else {
+                // Single line dragging (endpoint or line)
+                const line = this.dragging.line;
+                const finalX1 = line.x1;
+                const finalY1 = line.y1;
+                const finalX2 = line.x2;
+                const finalY2 = line.y2;
 
+                // Only create undo command if position actually changed
+                const moved = finalX1 !== this.dragging.initialX1 ||
+                             finalY1 !== this.dragging.initialY1 ||
+                             finalX2 !== this.dragging.initialX2 ||
+                             finalY2 !== this.dragging.initialY2;
+
+                if (moved) {
+                    if (this.dragging.type === 'endpoint') {
+                        cmd = new MoveLineEndpointCommand(
+                            this.entities,
+                            line,
+                            this.dragging.endpoint,
+                            this.dragging.endpoint === 'start' ? finalX1 : finalX2,
+                            this.dragging.endpoint === 'start' ? finalY1 : finalY2
+                        );
+                        // Override old position with initial position (before drag started)
+                        cmd.oldX = this.dragging.endpoint === 'start' ? this.dragging.initialX1 : this.dragging.initialX2;
+                        cmd.oldY = this.dragging.endpoint === 'start' ? this.dragging.initialY1 : this.dragging.initialY2;
+                    } else if (this.dragging.type === 'line') {
+                        cmd = new MoveLineCommand(
+                            this.entities,
+                            line,
+                            finalX1,
+                            finalY1,
+                            finalX2,
+                            finalY2
+                        );
+                        // Override old position with initial position (before drag started)
+                        cmd.oldX1 = this.dragging.initialX1;
+                        cmd.oldY1 = this.dragging.initialY1;
+                        cmd.oldX2 = this.dragging.initialX2;
+                        cmd.oldY2 = this.dragging.initialY2;
+                    }
+                }
+            }
+
+            // Add command to history if created
+            if (cmd) {
                 // Add to history (command already executed during drag)
                 // Don't use execute() since the action already happened
                 this.history.undoStack.push(cmd);
@@ -357,6 +400,7 @@ export class InteractionController {
                 }
             }
 
+            // Reset dragging state
             this.dragging.active = false;
             this.dragging.line = null;
             this.dragging.endpoint = null;
@@ -367,6 +411,9 @@ export class InteractionController {
             this.dragging.startY = 0;
             this.dragging.initialBounds = null;
             this.dragging.resizeHandle = null;
+            this.dragging.totalDeltaX = 0;
+            this.dragging.totalDeltaY = 0;
+            this.dragging.originalBounds = null;
             return;
         }
 

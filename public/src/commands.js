@@ -163,6 +163,46 @@ export class BatchCommand extends Command {
     }
 }
 
+export class MoveMultipleCommand extends Command {
+    constructor(entities, lines, spawners, deltaX, deltaY) {
+        super();
+        this.entities = entities;
+        this.lines = lines;
+        this.spawners = spawners;
+        this.deltaX = deltaX;
+        this.deltaY = deltaY;
+    }
+
+    execute() {
+        this.entities.moveMultiple(this.lines, this.spawners, this.deltaX, this.deltaY);
+    }
+
+    undo() {
+        // Move back by negative delta
+        this.entities.moveMultiple(this.lines, this.spawners, -this.deltaX, -this.deltaY);
+    }
+}
+
+export class ScaleMultipleCommand extends Command {
+    constructor(entities, lines, spawners, oldBounds, newBounds) {
+        super();
+        this.entities = entities;
+        this.lines = lines;
+        this.spawners = spawners;
+        this.oldBounds = oldBounds;
+        this.newBounds = newBounds;
+    }
+
+    execute() {
+        this.entities.scaleMultiple(this.lines, this.spawners, this.oldBounds, this.newBounds);
+    }
+
+    undo() {
+        // Scale back to old bounds
+        this.entities.scaleMultiple(this.lines, this.spawners, this.newBounds, this.oldBounds);
+    }
+}
+
 export class ClearAllCommand extends Command {
     constructor(entities) {
         super();
