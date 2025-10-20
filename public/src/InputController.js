@@ -119,7 +119,7 @@ export class InputController {
 
     handleKeyDown(e) {
         if (this.onKeyPress) {
-            this.onKeyPress(e.key);
+            this.onKeyPress(e.key, e.ctrlKey, e.metaKey, e.shiftKey);
         }
     }
 

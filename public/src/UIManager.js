@@ -1,7 +1,3 @@
-/**
- * UIManager - Manages all UI state and rendering coordination
- * Single place for hover states, selection, UI elements
- */
 export class UIManager {
     constructor() {
         // Hover states
@@ -37,17 +33,32 @@ export class UIManager {
 
         // Help overlay
         this.help = {
-            visible: true,
-            showTime: Date.now()
+            visible: false,
+            showTime: 0
         };
 
         // Stats panel
         this.stats = {
             visible: true
         };
+
+        this.welcome = {
+            isActive: true,
+            startTime: Date.now(),
+            clickedToStart: false,
+            ballsFalling: false,
+            ballsFallTime: 0,
+            ballsCreated: false
+        };
     }
 
-    // ==================== HOVER ====================
+    needsWelcomeBalls() {
+        return this.welcome.isActive && !this.welcome.ballsCreated;
+    }
+
+    markWelcomeBallsCreated() {
+        this.welcome.ballsCreated = true;
+    }
 
     setHoveredLine(line) {
         this.hovered.line = line;
@@ -66,8 +77,6 @@ export class UIManager {
         this.hovered.spawner = null;
         this.hovered.endpoint = null;
     }
-
-    // ==================== SELECTION ====================
 
     selectLine(line) {
         this.selected.line = line;
@@ -176,8 +185,6 @@ export class UIManager {
                y >= btn.y && y <= btn.y + btn.height;
     }
 
-    // ==================== HELP ICON ====================
-
     setHelpIcon(bounds) {
         this.helpIcon = bounds;
     }
@@ -191,8 +198,6 @@ export class UIManager {
         const distance = Math.hypot(x - centerX, y - centerY);
         return distance <= radius;
     }
-
-    // ==================== HELP ====================
 
     toggleHelp() {
         this.help.visible = !this.help.visible;
@@ -211,12 +216,7 @@ export class UIManager {
         if (!this.help.visible) return false;
         const elapsed = Date.now() - this.help.showTime;
         const isVisible = elapsed < 5000;
-
-        // Auto-hide when fade completes
-        if (!isVisible && this.help.visible) {
-            this.help.visible = false;
-        }
-
+        if (!isVisible && this.help.visible) this.help.visible = false;
         return isVisible;
     }
 
@@ -228,7 +228,34 @@ export class UIManager {
         return 1;
     }
 
-    // ==================== CURSOR ====================
+    isWelcomeActive() {
+        return this.welcome.isActive;
+    }
+
+    isWelcomeShowingTitle() {
+        return this.welcome.isActive && !this.welcome.clickedToStart;
+    }
+
+    startGame() {
+        if (!this.welcome.isActive) return false;
+
+        this.welcome.clickedToStart = true;
+        this.welcome.ballsFalling = true;
+        this.welcome.ballsFallTime = Date.now();
+        return true;
+    }
+
+    isWelcomeBallsFalling() {
+        return this.welcome.ballsFalling;
+    }
+
+    finishWelcome() {
+        const elapsed = Date.now() - this.welcome.ballsFallTime;
+        if (elapsed > 5000) {
+            this.welcome.isActive = false;
+            this.welcome.ballsFalling = false;
+        }
+    }
 
     getCursor(mouseX, mouseY) {
         // Priority order for cursor feedback (most specific to least)
