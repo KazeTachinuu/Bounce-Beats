@@ -22,16 +22,20 @@ export class InputController {
         canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        canvas.addEventListener('wheel', (e) => this.handleWheel(e));
         canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
         canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
         canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+        document.addEventListener('keyup', (e) => this.handleKeyUp(e));
 
         // Event callbacks (set by game)
         this.onMouseDown = null;
         this.onMouseMove = null;
         this.onMouseUp = null;
         this.onKeyPress = null;
+        this.onKeyUp = null;
+        this.onWheel = null;
     }
 
     getCanvasCoordinates(e) {
@@ -116,6 +120,23 @@ export class InputController {
     handleKeyDown(e) {
         if (this.onKeyPress) {
             this.onKeyPress(e.key);
+        }
+    }
+
+    handleKeyUp(e) {
+        if (this.onKeyUp) {
+            this.onKeyUp(e.key);
+        }
+    }
+
+    handleWheel(e) {
+        e.preventDefault();
+        const { x, y } = this.getCanvasCoordinates(e);
+
+        if (this.onWheel) {
+            // Normalize delta (some mice have different sensitivities)
+            const delta = Math.sign(e.deltaY);
+            this.onWheel(delta, { x, y });
         }
     }
 

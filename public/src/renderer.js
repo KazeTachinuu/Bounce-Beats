@@ -116,16 +116,65 @@ export class Renderer {
     drawCurrentLine(line, mouseX, mouseY) {
         if (!line) return;
 
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        this.ctx.lineWidth = 3;
+        const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+
+        // Pulsing opacity based on length (feedback)
+        const pulse = Math.sin(Date.now() / 100) * 0.15 + 0.65;
+
+        // Gradient line for better visual feedback
+        const gradient = this.ctx.createLinearGradient(line.x1, line.y1, line.x2, line.y2);
+        gradient.addColorStop(0, `rgba(100, 200, 255, ${pulse})`);
+        gradient.addColorStop(1, `rgba(150, 100, 255, ${pulse})`);
+
+        // Outer glow
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * 0.3})`;
+        this.ctx.lineWidth = 8;
         this.ctx.lineCap = 'round';
         this.ctx.beginPath();
         this.ctx.moveTo(line.x1, line.y1);
         this.ctx.lineTo(line.x2, line.y2);
         this.ctx.stroke();
 
-        // Draw length and note preview
-        this.drawLineInfo(line, mouseX + 15, mouseY - 10);
+        // Main line
+        this.ctx.strokeStyle = gradient;
+        this.ctx.lineWidth = 4;
+        this.ctx.lineCap = 'round';
+        this.ctx.beginPath();
+        this.ctx.moveTo(line.x1, line.y1);
+        this.ctx.lineTo(line.x2, line.y2);
+        this.ctx.stroke();
+
+        // Draw endpoint markers
+        this.ctx.fillStyle = `rgba(100, 200, 255, ${pulse})`;
+        this.ctx.beginPath();
+        this.ctx.arc(line.x1, line.y1, 5, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(line.x2, line.y2, 5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw length and note preview with background
+        const infoX = mouseX + 15;
+        const infoY = mouseY - 10;
+        const note = getNoteFromLength(length);
+        const text = `${Math.round(length)}px → ${note}`;
+
+        this.ctx.font = '13px monospace';
+        const metrics = this.ctx.measureText(text);
+        const padding = 8;
+
+        // Info background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(infoX - padding, infoY - 16, metrics.width + padding * 2, 24);
+
+        // Info border
+        this.ctx.strokeStyle = `rgba(100, 200, 255, ${pulse})`;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(infoX - padding, infoY - 16, metrics.width + padding * 2, 24);
+
+        // Info text
+        this.ctx.fillStyle = `rgba(255, 255, 255, 0.95)`;
+        this.ctx.fillText(text, infoX, infoY);
     }
 
     drawEndpoints(line) {
@@ -139,7 +188,10 @@ export class Renderer {
     }
 
     drawSpawner(spawner, isHovered = false, timestamp = performance.now()) {
-        const pulse = Math.sin(timestamp / 300) * 0.2 + 0.8;
+        const interval = spawner.interval || 1500;
+        // Pulse speed based on interval (faster interval = faster pulse)
+        const pulseSpeed = 300 * (interval / 1500);
+        const pulse = Math.sin(timestamp / pulseSpeed) * 0.2 + 0.8;
         const scale = isHovered ? 1.15 : 1;
 
         // Hover glow
@@ -150,8 +202,22 @@ export class Renderer {
             this.ctx.fill();
         }
 
-        // Outer ring
-        this.ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * 0.7})`;
+        // Color based on speed (fast = red, slow = blue, medium = white)
+        let colorHue = 0;
+        if (interval < 800) {
+            colorHue = 0; // Fast - red
+        } else if (interval > 2500) {
+            colorHue = 220; // Slow - blue
+        } else {
+            colorHue = 180; // Medium - cyan
+        }
+
+        // Outer ring with color
+        if (interval !== 1500) {
+            this.ctx.strokeStyle = `hsla(${colorHue}, 70%, 60%, ${pulse * 0.7})`;
+        } else {
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * 0.7})`;
+        }
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.arc(spawner.x, spawner.y, 16 * scale, 0, Math.PI * 2);
@@ -169,12 +235,44 @@ export class Renderer {
         this.ctx.arc(spawner.x, spawner.y, 3, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Delete hint on hover
+        // Show rhythm info on hover
         if (isHovered) {
-            this.ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
+            const bpm = Math.round(60000 / interval);
+            const intervalSec = (interval / 1000).toFixed(1);
+
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
             this.ctx.font = '11px monospace';
+            const text1 = `${intervalSec}s (${bpm} BPM)`;
+            const text2 = 'Scroll to adjust';
+            const metrics1 = this.ctx.measureText(text1);
+            const metrics2 = this.ctx.measureText(text2);
+            const maxWidth = Math.max(metrics1.width, metrics2.width);
+            const padding = 6;
+
+            // Background box
+            this.ctx.fillRect(
+                spawner.x - maxWidth / 2 - padding,
+                spawner.y + 28,
+                maxWidth + padding * 2,
+                38
+            );
+
+            // Border
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(
+                spawner.x - maxWidth / 2 - padding,
+                spawner.y + 28,
+                maxWidth + padding * 2,
+                38
+            );
+
+            // Text
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('Click to remove', spawner.x, spawner.y + 30);
+            this.ctx.fillText(text1, spawner.x, spawner.y + 42);
+            this.ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
+            this.ctx.fillText(text2, spawner.x, spawner.y + 56);
             this.resetTextStyle();
         }
     }
@@ -186,19 +284,191 @@ export class Renderer {
         const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
         const note = getNoteFromLength(length);
 
-        // Draw info at specified position
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        // Smart positioning: avoid cursor and line overlap
+        const lineMidX = (line.x1 + line.x2) / 2;
+        const lineMidY = (line.y1 + line.y2) / 2;
+
+        // Offset from cursor
+        let infoX = x + 20;
+        let infoY = y - 30;
+
+        // If too close to line, move further
+        const distToLine = Math.hypot(infoX - lineMidX, infoY - lineMidY);
+        if (distToLine < 60) {
+            infoY = y - 60; // Move up more
+        }
+
+        // Keep in bounds
+        const text = `${Math.round(length)}px → ${note}`;
+        this.ctx.font = '13px monospace';
+        const metrics = this.ctx.measureText(text);
+        const padding = 8;
+        const boxWidth = metrics.width + padding * 2;
+
+        if (infoX + boxWidth > window.innerWidth) {
+            infoX = x - boxWidth - 20; // Flip to left
+        }
+        if (infoY - 16 < 0) {
+            infoY = y + 40; // Flip to bottom
+        }
+
+        // Draw with background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        this.ctx.fillRect(infoX - padding, infoY - 16, boxWidth, 24);
+
+        this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.6)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(infoX - padding, infoY - 16, boxWidth, 24);
+
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        this.ctx.fillText(text, infoX, infoY);
+    }
+
+    drawAreaSelection(selection) {
+        if (!selection) return;
+
+        const x1 = Math.min(selection.x1, selection.x2);
+        const y1 = Math.min(selection.y1, selection.y2);
+        const w = Math.abs(selection.x2 - selection.x1);
+        const h = Math.abs(selection.y2 - selection.y1);
+
+        // Animated dashed border - faster for snappy feel
+        const dashOffset = (Date.now() / 20) % 20;
+
+        // Pulsing fill for feedback
+        const pulse = Math.sin(Date.now() / 150) * 0.03 + 0.1;
+
+        // Fill
+        this.ctx.fillStyle = `rgba(100, 200, 255, ${pulse})`;
+        this.ctx.fillRect(x1, y1, w, h);
+
+        // Border - thicker for better visibility
+        this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.8)';
+        this.ctx.lineWidth = 2.5;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.lineDashOffset = -dashOffset;
+        this.ctx.strokeRect(x1, y1, w, h);
+        this.ctx.setLineDash([]);
+
+        // Corner handles - larger for snappy feel
+        const handleSize = 10;
+        this.ctx.fillStyle = 'rgba(100, 200, 255, 0.95)';
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        this.ctx.lineWidth = 1.5;
+        [[x1, y1], [x1 + w, y1], [x1, y1 + h], [x1 + w, y1 + h]].forEach(([hx, hy]) => {
+            this.ctx.fillRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+            this.ctx.strokeRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
+        });
+    }
+
+    drawMultiSelection(lines, spawners) {
+        if (lines.length === 0 && spawners.length === 0) return null;
+
+        // Calculate bounding box
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        lines.forEach(line => {
+            minX = Math.min(minX, line.x1, line.x2);
+            minY = Math.min(minY, line.y1, line.y2);
+            maxX = Math.max(maxX, line.x1, line.x2);
+            maxY = Math.max(maxY, line.y1, line.y2);
+        });
+
+        spawners.forEach(spawner => {
+            minX = Math.min(minX, spawner.x - 20);
+            minY = Math.min(minY, spawner.y - 20);
+            maxX = Math.max(maxX, spawner.x + 20);
+            maxY = Math.max(maxY, spawner.y + 20);
+        });
+
+        if (!isFinite(minX)) return null;
+
+        const padding = 20;
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+
+        // Animated dashed border - faster for snappy feel
+        const dashOffset = (Date.now() / 20) % 20;
+
+        // Pulsing fill for visual feedback
+        const pulse = Math.sin(Date.now() / 150) * 0.02 + 0.06;
+
+        // Fill
+        this.ctx.fillStyle = `rgba(255, 150, 100, ${pulse})`;
+        this.ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+
+        // Border - thicker and brighter for better visibility
+        this.ctx.strokeStyle = 'rgba(255, 150, 100, 0.85)';
+        this.ctx.lineWidth = 2.5;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.lineDashOffset = -dashOffset;
+        this.ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+        this.ctx.setLineDash([]);
+
+        // Resize handles (8 positions: corners + midpoints) - larger for better UX
+        const handleSize = 12;
+        const handles = [
+            { x: minX, y: minY, cursor: 'nw-resize', position: 'tl' },
+            { x: (minX + maxX) / 2, y: minY, cursor: 'n-resize', position: 't' },
+            { x: maxX, y: minY, cursor: 'ne-resize', position: 'tr' },
+            { x: maxX, y: (minY + maxY) / 2, cursor: 'e-resize', position: 'r' },
+            { x: maxX, y: maxY, cursor: 'se-resize', position: 'br' },
+            { x: (minX + maxX) / 2, y: maxY, cursor: 's-resize', position: 'b' },
+            { x: minX, y: maxY, cursor: 'sw-resize', position: 'bl' },
+            { x: minX, y: (minY + maxY) / 2, cursor: 'w-resize', position: 'l' }
+        ];
+
+        handles.forEach(handle => {
+            // Handle background with slight pulse
+            const handlePulse = Math.sin(Date.now() / 200) * 0.1 + 0.95;
+            this.ctx.fillStyle = `rgba(255, 150, 100, ${handlePulse})`;
+            this.ctx.fillRect(
+                handle.x - handleSize / 2,
+                handle.y - handleSize / 2,
+                handleSize,
+                handleSize
+            );
+
+            // Handle border - thicker for snappier feel
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(
+                handle.x - handleSize / 2,
+                handle.y - handleSize / 2,
+                handleSize,
+                handleSize
+            );
+        });
+
+        // Count badge
+        const count = lines.length + spawners.length;
+        const badge = `${count} selected`;
         this.ctx.font = '12px monospace';
-        this.ctx.fillText(`${Math.round(length)}px → ${note}`, x, y);
+        const metrics = this.ctx.measureText(badge);
+        const badgePadding = 6;
+
+        this.ctx.fillStyle = 'rgba(255, 150, 100, 0.9)';
+        this.ctx.fillRect(minX, minY - 24, metrics.width + badgePadding * 2, 20);
+
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillText(badge, minX + badgePadding, minY - 9);
+
+        // Return bounds and handles for interaction
+        return {
+            bounds: { minX, minY, maxX, maxY },
+            handles
+        };
     }
 
     drawHelp(alpha = 1) {
         const centerX = window.innerWidth / 2;
         const centerY = window.innerHeight / 2;
 
-        // Panel dimensions - Apple-style centered modal
-        const panelWidth = 600;
-        const panelHeight = 440;
+        // Panel dimensions - Apple-style centered modal (taller for new features)
+        const panelWidth = 680;
+        const panelHeight = 540;
         const panelX = centerX - panelWidth / 2;
         const panelY = centerY - panelHeight / 2;
         const contentPadding = 48;
@@ -229,12 +499,36 @@ export class Renderer {
         // Header section
         const headerY = panelY + contentPadding;
 
+        // Animated bouncing balls in title
+        const titleTime = Date.now() / 1000;
+        const ballRadius = 8;
+        const ballY = headerY + 14;
+
+        // Draw 3 bouncing balls before title
+        for (let i = 0; i < 3; i++) {
+            const bounceOffset = Math.abs(Math.sin(titleTime * 3 + i * 0.5)) * 8;
+            const ballX = panelX + contentPadding + i * 20;
+
+            // Ball gradient
+            const gradient = this.ctx.createRadialGradient(
+                ballX, ballY - bounceOffset, 0,
+                ballX, ballY - bounceOffset, ballRadius
+            );
+            gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.95})`);
+            gradient.addColorStop(1, `rgba(100, 200, 255, ${alpha * 0.7})`);
+
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(ballX, ballY - bounceOffset, ballRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
         // Title
         this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
         this.ctx.font = '600 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
         this.resetTextStyle();
         this.ctx.textBaseline = 'top';
-        this.ctx.fillText('Keyboard Shortcuts', panelX + contentPadding, headerY);
+        this.ctx.fillText('Bounce Beats', panelX + contentPadding + 70, headerY);
 
         // Subtitle
         this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.55})`;
@@ -311,10 +605,10 @@ export class Renderer {
         };
 
         // Content sections with grid layout
-        const contentY = dividerY + 32;
+        const contentY = dividerY + 24;
         const col1X = panelX + contentPadding;
         const col2X = panelX + panelWidth / 2 + 8;
-        const rowHeight = 48;
+        const rowHeight = 44;
 
         // Left column - Drawing
         let y = contentY;
@@ -323,26 +617,32 @@ export class Renderer {
         this.resetTextStyle();
         this.ctx.textBaseline = 'top';
         this.ctx.fillText('DRAWING', col1X, y);
-        y += 28;
+        y += 26;
 
         drawShortcut('Click', 'Spawn ball', col1X, y);
         y += rowHeight;
         drawShortcut('Drag', 'Draw line', col1X, y);
         y += rowHeight;
-        drawShortcut('Hold', 'Spray / spawner', col1X, y);
+        drawShortcut('Hold', 'Ball spray / spawner', col1X, y);
+        y += rowHeight;
+        drawShortcut('Shift+Drag', 'Area select', col1X, y);
+        y += rowHeight;
+        drawShortcut('Scroll', 'Adjust spawner BPM', col1X, y);
 
         // Right column - Controls
         y = contentY;
         this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.45})`;
         this.ctx.font = '600 12px -apple-system, sans-serif';
         this.ctx.fillText('CONTROLS', col2X, y);
-        y += 28;
+        y += 26;
 
         drawShortcut('Space', 'Pause', col2X, y);
         y += rowHeight;
         drawShortcut([['Del', 'C']], 'Clear all', col2X, y);
         y += rowHeight;
         drawShortcut('X', 'Clear balls', col2X, y);
+        y += rowHeight;
+        drawShortcut('Esc', 'Deselect', col2X, y);
         y += rowHeight;
         drawShortcut([['H', 'T']], 'Help / Stats', col2X, y);
 

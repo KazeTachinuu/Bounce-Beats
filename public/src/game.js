@@ -50,9 +50,21 @@ export class Game {
         this.input.onMouseMove = (pos) => this.interaction.handleMouseMove(pos);
         this.input.onMouseUp = (event) => this.interaction.handleMouseUp(event);
         this.input.onKeyPress = (key) => this.interaction.handleKeyPress(key);
+        this.input.onKeyUp = (key) => this.interaction.handleKeyUp(key);
+        this.input.onWheel = (delta, pos) => this.handleWheel(delta, pos);
 
         // Pause callback for interaction controller
         this.interaction.togglePause = () => this.togglePause();
+    }
+
+    handleWheel(delta, pos) {
+        // Adjust spawner rhythm with scroll wheel
+        const spawner = this.entities.findNearestSpawner(pos.x, pos.y, 50);
+        if (spawner) {
+            const currentInterval = spawner.interval || 1500;
+            const newInterval = currentInterval + delta * 50; // 50ms per scroll tick
+            this.entities.setSpawnerInterval(spawner, newInterval);
+        }
     }
 
     setupCollisions() {
@@ -114,6 +126,23 @@ export class Game {
             this.renderer.drawLine(line, isHovered, isSelected);
         });
 
+        // Render area selection
+        const areaSelection = this.ui.getAreaSelection();
+        if (areaSelection) {
+            this.renderer.drawAreaSelection(areaSelection);
+        }
+
+        // Render multi-selection
+        const multiSelection = this.ui.getSelectedMultiple();
+        const hasMultiSelection = multiSelection.lines.length > 0 || multiSelection.spawners.length > 0;
+
+        if (hasMultiSelection) {
+            const boundsAndHandles = this.renderer.drawMultiSelection(multiSelection.lines, multiSelection.spawners);
+            this.ui.setMultiSelectionBounds(boundsAndHandles);
+        } else {
+            this.ui.setMultiSelectionBounds(null);
+        }
+
         // Render drawing preview
         const drawing = this.interaction.getDrawing();
         if (drawing) {
@@ -134,7 +163,7 @@ export class Game {
         const dragging = this.interaction.getDragging();
         const showingHelp = this.ui.shouldShowHelp();
 
-        if (dragging) {
+        if (dragging && dragging.line) {
             this.renderer.drawEndpoints(dragging.line);
             // Show line length/note info while dragging (unless help is showing for all lines)
             if (!showingHelp) {
@@ -145,7 +174,16 @@ export class Game {
         }
 
         // Render delete button
-        if (this.ui.selected.line) {
+
+        if (hasMultiSelection && this.ui.multiSelectionBounds) {
+            // Delete button for multi-selection - centered on bounding box
+            const bounds = this.ui.multiSelectionBounds.bounds;
+            const centerX = (bounds.minX + bounds.maxX) / 2;
+            const centerY = bounds.minY - 20; // Above the selection
+            const btnBounds = this.renderer.drawDeleteButton(centerX, centerY, this.input.mouse.x, this.input.mouse.y);
+            this.ui.setDeleteButton(btnBounds);
+        } else if (this.ui.selected.line) {
+            // Delete button for single line selection
             const midX = (this.ui.selected.line.x1 + this.ui.selected.line.x2) / 2;
             const midY = (this.ui.selected.line.y1 + this.ui.selected.line.y2) / 2;
             const bounds = this.renderer.drawDeleteButton(midX, midY, this.input.mouse.x, this.input.mouse.y);
@@ -187,7 +225,7 @@ export class Game {
         }
 
         // Update cursor
-        this.input.setCursor(this.ui.getCursor());
+        this.input.setCursor(this.ui.getCursor(this.input.mouse.x, this.input.mouse.y));
     }
 
     animate() {

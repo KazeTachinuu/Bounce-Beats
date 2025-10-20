@@ -24,13 +24,20 @@ export class InteractionController {
             active: false,
             line: null,
             endpoint: null,
-            type: null, // 'endpoint' or 'line'
+            type: null, // 'endpoint', 'line', 'multiple', or 'resize'
             offsetX: 0,
-            offsetY: 0
+            offsetY: 0,
+            startX: 0,
+            startY: 0,
+            initialBounds: null,
+            resizeHandle: null
         };
 
         // Ball spray state
         this.lastBallSpray = 0;
+
+        // Modifier keys
+        this.shiftPressed = false;
     }
 
     // ==================== MOUSE DOWN ====================
@@ -48,21 +55,58 @@ export class InteractionController {
         if (this.ui.isPointInDeleteButton(pos.x, pos.y)) {
             const line = this.ui.getSelectedLine();
             if (line) this.entities.removeLine(line);
+
+            // Also handle multi-delete
+            const multi = this.ui.getSelectedMultiple();
+            if (multi.lines.length > 0 || multi.spawners.length > 0) {
+                this.entities.removeMultiple(multi.lines, multi.spawners);
+                this.ui.deselectMultiple();
+            }
+
             this.ui.deselectLine();
             return;
         }
 
-        // Priority 2: Remove spawner
+        // Priority 2: Remove spawner (or adjust rhythm with scroll)
         const spawner = this.ui.hovered.spawner;
-        if (spawner) {
+        if (spawner && !this.shiftPressed) {
             this.entities.removeSpawner(spawner);
             this.ui.setHoveredSpawner(null);
             return;
         }
 
-        // Priority 3: Start endpoint drag
+        // Priority 3: Resize multiple selection (handles)
+        if (this.ui.hasMultipleSelection() && !this.shiftPressed) {
+            const resizeHandle = this.ui.findResizeHandle(pos.x, pos.y);
+            if (resizeHandle) {
+                this.dragging.active = true;
+                this.dragging.type = 'resize';
+                this.dragging.resizeHandle = resizeHandle;
+                this.dragging.startX = pos.x;
+                this.dragging.startY = pos.y;
+                this.dragging.initialBounds = { ...this.ui.multiSelectionBounds.bounds };
+                return;
+            }
+
+            // Priority 4: Drag multiple selection (inside bounding box)
+            const bounds = this.ui.multiSelectionBounds?.bounds;
+            if (bounds) {
+                const insideBox = pos.x >= bounds.minX && pos.x <= bounds.maxX &&
+                                 pos.y >= bounds.minY && pos.y <= bounds.maxY;
+
+                if (insideBox) {
+                    this.dragging.active = true;
+                    this.dragging.type = 'multiple';
+                    this.dragging.startX = pos.x;
+                    this.dragging.startY = pos.y;
+                    return;
+                }
+            }
+        }
+
+        // Priority 4: Start endpoint drag
         const endpoint = this.ui.hovered.endpoint;
-        if (endpoint) {
+        if (endpoint && !this.shiftPressed) {
             this.dragging.active = true;
             this.dragging.type = 'endpoint';
             this.dragging.line = endpoint.line;
@@ -70,9 +114,9 @@ export class InteractionController {
             return;
         }
 
-        // Priority 4: Start line drag (move entire line)
+        // Priority 5: Start line drag (move entire line)
         const line = this.ui.hovered.line;
-        if (line) {
+        if (line && !this.shiftPressed) {
             this.dragging.active = true;
             this.dragging.type = 'line';
             this.dragging.line = line;
@@ -87,18 +131,31 @@ export class InteractionController {
             return;
         }
 
-        // Priority 5: Start drawing
-        this.ui.deselectLine();
-        this.drawing.active = true;
-        this.drawing.x1 = pos.x;
-        this.drawing.y1 = pos.y;
-        this.drawing.x2 = pos.x;
-        this.drawing.y2 = pos.y;
+        // Priority 6: Start area selection (with Shift) or drawing
+        if (this.shiftPressed) {
+            this.ui.deselectLine();
+            this.ui.deselectMultiple();
+            this.ui.startAreaSelection(pos.x, pos.y);
+        } else {
+            this.ui.deselectLine();
+            this.ui.deselectMultiple();
+            this.drawing.active = true;
+            this.drawing.x1 = pos.x;
+            this.drawing.y1 = pos.y;
+            this.drawing.x2 = pos.x;
+            this.drawing.y2 = pos.y;
+        }
     }
 
     // ==================== MOUSE MOVE ====================
 
     handleMouseMove(pos) {
+        // Update area selection
+        if (this.ui.getAreaSelection()) {
+            this.ui.updateAreaSelection(pos.x, pos.y);
+            return;
+        }
+
         // Update dragging
         if (this.dragging.active) {
             if (this.dragging.type === 'endpoint') {
@@ -131,6 +188,48 @@ export class InteractionController {
                     line.x2 + deltaX,
                     line.y2 + deltaY
                 );
+            } else if (this.dragging.type === 'multiple') {
+                // Move multiple selection
+                const deltaX = pos.x - this.dragging.startX;
+                const deltaY = pos.y - this.dragging.startY;
+
+                const multi = this.ui.getSelectedMultiple();
+                this.entities.moveMultiple(multi.lines, multi.spawners, deltaX, deltaY);
+
+                this.dragging.startX = pos.x;
+                this.dragging.startY = pos.y;
+            } else if (this.dragging.type === 'resize') {
+                // Resize multiple selection - simple and clean
+                const handle = this.dragging.resizeHandle;
+                const deltaX = pos.x - this.dragging.startX;
+                const deltaY = pos.y - this.dragging.startY;
+
+                // Calculate new bounds
+                const newBounds = { ...this.dragging.initialBounds };
+
+                // Update only the edges being dragged
+                if (handle.position.includes('l')) newBounds.minX += deltaX;
+                if (handle.position.includes('r')) newBounds.maxX += deltaX;
+                if (handle.position.includes('t')) newBounds.minY += deltaY;
+                if (handle.position.includes('b')) newBounds.maxY += deltaY;
+
+                // Prevent too small
+                if (newBounds.maxX - newBounds.minX < 50) return;
+                if (newBounds.maxY - newBounds.minY < 50) return;
+
+                // Apply resize
+                const multi = this.ui.getSelectedMultiple();
+                this.entities.scaleMultiple(
+                    multi.lines,
+                    multi.spawners,
+                    this.dragging.initialBounds,
+                    newBounds
+                );
+
+                // Update for next frame
+                this.dragging.startX = pos.x;
+                this.dragging.startY = pos.y;
+                this.dragging.initialBounds = newBounds;
             }
             return;
         }
@@ -149,6 +248,22 @@ export class InteractionController {
     // ==================== MOUSE UP ====================
 
     handleMouseUp(event) {
+        // Finish area selection
+        const areaSelection = this.ui.getAreaSelection();
+        if (areaSelection) {
+            const bounds = this.ui.getAreaSelectionBounds();
+            const selected = this.entities.findEntitiesInArea(
+                bounds.x1, bounds.y1, bounds.x2, bounds.y2
+            );
+
+            if (selected.lines.length > 0 || selected.spawners.length > 0) {
+                this.ui.selectMultiple(selected.lines, selected.spawners);
+            }
+
+            this.ui.finishAreaSelection();
+            return;
+        }
+
         // Finish dragging
         if (this.dragging.active) {
             this.dragging.active = false;
@@ -157,6 +272,10 @@ export class InteractionController {
             this.dragging.type = null;
             this.dragging.offsetX = 0;
             this.dragging.offsetY = 0;
+            this.dragging.startX = 0;
+            this.dragging.startY = 0;
+            this.dragging.initialBounds = null;
+            this.dragging.resizeHandle = null;
             return;
         }
 
@@ -199,18 +318,34 @@ export class InteractionController {
         const normalizedKey = key.toLowerCase();
 
         const handlers = {
-            'c': () => this.clearLinesAndSpawners(),
+            // Standard shortcuts
             'delete': () => this.handleDeleteKey(),
+            'backspace': () => this.handleDeleteKey(), // Same as Delete - respect selections
+            'escape': () => {
+                this.ui.deselectLine();
+                this.ui.deselectMultiple();
+            },
+
+            // App-specific shortcuts
+            'c': () => this.clearLinesAndSpawners(),
             'x': () => this.entities.clearBalls(),
             ' ': () => this.togglePause?.(),
-            'backspace': () => this.entities.removeLastLine(),
-            'escape': () => this.ui.deselectLine(),
             'h': () => this.ui.toggleHelp(),
-            't': () => this.ui.toggleStats()
+            't': () => this.ui.toggleStats(),
+
+            // Modifiers
+            'shift': () => { this.shiftPressed = true; }
         };
 
         const handler = handlers[normalizedKey];
         if (handler) handler();
+    }
+
+    handleKeyUp(key) {
+        const normalizedKey = key.toLowerCase();
+        if (normalizedKey === 'shift') {
+            this.shiftPressed = false;
+        }
     }
 
     clearLinesAndSpawners() {
@@ -219,13 +354,23 @@ export class InteractionController {
     }
 
     handleDeleteKey() {
+        // Priority: multi-selection > single selection > delete all
+        const multi = this.ui.getSelectedMultiple();
+        if (multi.lines.length > 0 || multi.spawners.length > 0) {
+            this.entities.removeMultiple(multi.lines, multi.spawners);
+            this.ui.deselectMultiple();
+            return;
+        }
+
         const line = this.ui.getSelectedLine();
         if (line) {
             this.entities.removeLine(line);
             this.ui.deselectLine();
-        } else {
-            this.clearLinesAndSpawners();
+            return;
         }
+
+        // Only clear all if nothing is selected (safer UX)
+        this.clearLinesAndSpawners();
     }
 
     // ==================== HELPERS ====================
@@ -244,6 +389,13 @@ export class InteractionController {
     }
 
     updateHoverStates(pos) {
+        // Check for resize handle hover first
+        if (this.ui.hasMultipleSelection()) {
+            const handle = this.ui.findResizeHandle(pos.x, pos.y);
+            this.ui.setResizeHandle(handle);
+            if (handle) return; // Don't check other hovers when over handle
+        }
+
         // Don't show hover when line is selected
         if (this.ui.getSelectedLine()) {
             this.ui.setHoveredLine(null);
@@ -276,9 +428,21 @@ export class InteractionController {
 
             if (holdDuration > INTERACTION_CONFIG.holdThreshold && now - this.lastBallSpray > INTERACTION_CONFIG.ballSprayInterval) {
                 if (!this.isMouseOverUI(mouseState.downX, mouseState.downY)) {
-                    const offsetX = (Math.random() - 0.5) * 20;
-                    const offsetY = (Math.random() - 0.5) * 20;
-                    this.entities.addBall(mouseState.x + offsetX, mouseState.y + offsetY);
+                    // Circular spray pattern with increasing radius
+                    const sprayCount = Math.floor((holdDuration - INTERACTION_CONFIG.holdThreshold) / 500) + 1;
+                    const radius = 15 + (sprayCount * 3);
+                    const angle = (now / 100) % (Math.PI * 2); // Rotating spray
+
+                    // Multiple balls in a burst for snappy feel
+                    const burstSize = Math.min(3, Math.floor(holdDuration / 1000) + 1);
+
+                    for (let i = 0; i < burstSize; i++) {
+                        const offsetAngle = angle + (i * Math.PI * 2 / burstSize);
+                        const offsetX = Math.cos(offsetAngle) * radius;
+                        const offsetY = Math.sin(offsetAngle) * radius;
+                        this.entities.addBall(mouseState.x + offsetX, mouseState.y + offsetY);
+                    }
+
                     this.lastBallSpray = now;
                 }
             }

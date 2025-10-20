@@ -13,8 +13,23 @@ export class UIManager {
 
         // Selection state
         this.selected = {
-            line: null
+            line: null,
+            lines: [],
+            spawners: []
         };
+
+        // Area selection
+        this.areaSelection = {
+            active: false,
+            x1: 0,
+            y1: 0,
+            x2: 0,
+            y2: 0
+        };
+
+        // Multi-selection resize
+        this.multiSelectionBounds = null;
+        this.resizeHandle = null;
 
         // UI elements
         this.deleteButton = null;
@@ -65,6 +80,87 @@ export class UIManager {
 
     getSelectedLine() {
         return this.selected.line;
+    }
+
+    selectMultiple(lines, spawners) {
+        this.selected.lines = lines;
+        this.selected.spawners = spawners;
+    }
+
+    deselectMultiple() {
+        this.selected.lines = [];
+        this.selected.spawners = [];
+    }
+
+    getSelectedMultiple() {
+        return {
+            lines: this.selected.lines,
+            spawners: this.selected.spawners
+        };
+    }
+
+    hasMultipleSelection() {
+        return this.selected.lines.length > 0 || this.selected.spawners.length > 0;
+    }
+
+    // ==================== AREA SELECTION ====================
+
+    startAreaSelection(x, y) {
+        this.areaSelection.active = true;
+        this.areaSelection.x1 = x;
+        this.areaSelection.y1 = y;
+        this.areaSelection.x2 = x;
+        this.areaSelection.y2 = y;
+    }
+
+    updateAreaSelection(x, y) {
+        if (!this.areaSelection.active) return;
+        this.areaSelection.x2 = x;
+        this.areaSelection.y2 = y;
+    }
+
+    finishAreaSelection() {
+        this.areaSelection.active = false;
+    }
+
+    getAreaSelection() {
+        if (!this.areaSelection.active) return null;
+        return this.areaSelection;
+    }
+
+    getAreaSelectionBounds() {
+        const x1 = Math.min(this.areaSelection.x1, this.areaSelection.x2);
+        const y1 = Math.min(this.areaSelection.y1, this.areaSelection.y2);
+        const x2 = Math.max(this.areaSelection.x1, this.areaSelection.x2);
+        const y2 = Math.max(this.areaSelection.y1, this.areaSelection.y2);
+        return { x1, y1, x2, y2 };
+    }
+
+    // ==================== MULTI-SELECTION RESIZE ====================
+
+    setMultiSelectionBounds(boundsAndHandles) {
+        this.multiSelectionBounds = boundsAndHandles;
+    }
+
+    findResizeHandle(x, y) {
+        if (!this.multiSelectionBounds || !this.multiSelectionBounds.handles) return null;
+
+        const handleSize = 10;
+        for (const handle of this.multiSelectionBounds.handles) {
+            const dist = Math.hypot(x - handle.x, y - handle.y);
+            if (dist < handleSize) {
+                return handle;
+            }
+        }
+        return null;
+    }
+
+    setResizeHandle(handle) {
+        this.resizeHandle = handle;
+    }
+
+    getResizeHandle() {
+        return this.resizeHandle;
     }
 
     // ==================== DELETE BUTTON ====================
@@ -134,10 +230,21 @@ export class UIManager {
 
     // ==================== CURSOR ====================
 
-    getCursor() {
-        if (this.hovered.spawner) return 'pointer';
+    getCursor(mouseX, mouseY) {
+        // Priority order for cursor feedback (most specific to least)
+        if (this.resizeHandle) return this.resizeHandle.cursor;
         if (this.hovered.endpoint) return 'move';
-        if (this.hovered.line) return 'pointer';
+        if (this.hovered.spawner) return 'pointer';
+        if (this.hovered.line) return 'move'; // Move cursor when hovering line (can drag)
+
+        // Show move cursor when hovering inside multi-selection box
+        if (this.hasMultipleSelection() && this.multiSelectionBounds && mouseX !== undefined && mouseY !== undefined) {
+            const bounds = this.multiSelectionBounds.bounds;
+            const insideBox = mouseX >= bounds.minX && mouseX <= bounds.maxX &&
+                             mouseY >= bounds.minY && mouseY <= bounds.maxY;
+            if (insideBox) return 'move';
+        }
+
         return 'crosshair';
     }
 }

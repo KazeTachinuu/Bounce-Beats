@@ -141,11 +141,21 @@ export class EntityManager {
 
     // ==================== SPAWNERS ====================
 
-    addSpawner(x, y) {
-        if (this.spawners.length >= this.config.maxSpawners) return null;
-        const spawner = { x, y, lastSpawn: 0 };
+    addSpawner(x, y, interval = null) {
+        // No limit on spawners - let users create as many as they want
+        const spawner = {
+            x,
+            y,
+            lastSpawn: 0,
+            interval: interval || this.config.spawnerInterval
+        };
         this.spawners.push(spawner);
         return spawner;
+    }
+
+    setSpawnerInterval(spawner, interval) {
+        if (!spawner) return;
+        spawner.interval = Math.max(100, Math.min(5000, interval)); // Clamp 100ms to 5s
     }
 
     removeSpawner(spawner) {
@@ -168,7 +178,8 @@ export class EntityManager {
 
     updateSpawners(now) {
         this.spawners.forEach(spawner => {
-            if (now - spawner.lastSpawn > this.config.spawnerInterval) {
+            const interval = spawner.interval || this.config.spawnerInterval;
+            if (now - spawner.lastSpawn > interval) {
                 this.addBall(spawner.x, spawner.y);
                 spawner.lastSpawn = now;
             }
@@ -189,5 +200,73 @@ export class EntityManager {
 
     getLineAtBody(body) {
         return this.lines.find(l => l.getBody() === body);
+    }
+
+    // ==================== AREA SELECTION ====================
+
+    findEntitiesInArea(x1, y1, x2, y2) {
+        const selectedLines = [];
+        const selectedSpawners = [];
+
+        // Find lines
+        this.lines.forEach(line => {
+            const centerX = (line.x1 + line.x2) / 2;
+            const centerY = (line.y1 + line.y2) / 2;
+            if (centerX >= x1 && centerX <= x2 && centerY >= y1 && centerY <= y2) {
+                selectedLines.push(line);
+            }
+        });
+
+        // Find spawners
+        this.spawners.forEach(spawner => {
+            if (spawner.x >= x1 && spawner.x <= x2 &&
+                spawner.y >= y1 && spawner.y <= y2) {
+                selectedSpawners.push(spawner);
+            }
+        });
+
+        return { lines: selectedLines, spawners: selectedSpawners };
+    }
+
+    removeMultiple(lines, spawners) {
+        lines.forEach(line => this.removeLine(line));
+        spawners.forEach(spawner => this.removeSpawner(spawner));
+    }
+
+    moveMultiple(lines, spawners, deltaX, deltaY) {
+        lines.forEach(line => {
+            this.updateLinePosition(
+                line,
+                line.x1 + deltaX,
+                line.y1 + deltaY,
+                line.x2 + deltaX,
+                line.y2 + deltaY
+            );
+        });
+
+        spawners.forEach(spawner => {
+            spawner.x += deltaX;
+            spawner.y += deltaY;
+        });
+    }
+
+    scaleMultiple(lines, spawners, oldBounds, newBounds) {
+        const scaleX = (newBounds.maxX - newBounds.minX) / (oldBounds.maxX - oldBounds.minX);
+        const scaleY = (newBounds.maxY - newBounds.minY) / (oldBounds.maxY - oldBounds.minY);
+
+        lines.forEach(line => {
+            // Scale line endpoints relative to old bounds
+            const x1 = newBounds.minX + (line.x1 - oldBounds.minX) * scaleX;
+            const y1 = newBounds.minY + (line.y1 - oldBounds.minY) * scaleY;
+            const x2 = newBounds.minX + (line.x2 - oldBounds.minX) * scaleX;
+            const y2 = newBounds.minY + (line.y2 - oldBounds.minY) * scaleY;
+
+            this.updateLinePosition(line, x1, y1, x2, y2);
+        });
+
+        spawners.forEach(spawner => {
+            spawner.x = newBounds.minX + (spawner.x - oldBounds.minX) * scaleX;
+            spawner.y = newBounds.minY + (spawner.y - oldBounds.minY) * scaleY;
+        });
     }
 }
