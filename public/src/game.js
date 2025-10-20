@@ -122,7 +122,7 @@ export class Game {
         if (this.ui.needsWelcomeBalls()) {
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2 - 40;
-            const positions = this.renderer.generateTextBalls('BOUNCE BEATS', centerX, centerY, 8);
+            const positions = this.renderer.generateTextBalls('BOUNCE BEATS\nV2', centerX, centerY, 8);
             this.entities.createWelcomeBalls(positions);
             this.entities.createWelcomeLines(window.innerHeight - 80);
             this.ui.markWelcomeBallsCreated();
@@ -211,10 +211,12 @@ export class Game {
             const btnBounds = this.renderer.drawDeleteButton(centerX, centerY, this.input.mouse.x, this.input.mouse.y);
             this.ui.setDeleteButton(btnBounds);
         } else if (this.ui.selected.line) {
-            // Delete button for single line selection
-            const midX = (this.ui.selected.line.x1 + this.ui.selected.line.x2) / 2;
-            const midY = (this.ui.selected.line.y1 + this.ui.selected.line.y2) / 2;
-            const bounds = this.renderer.drawDeleteButton(midX, midY, this.input.mouse.x, this.input.mouse.y);
+            // Delete button for single line selection - positioned at click location
+            const clickPos = this.ui.selected.lineClickPos || {
+                x: (this.ui.selected.line.x1 + this.ui.selected.line.x2) / 2,
+                y: (this.ui.selected.line.y1 + this.ui.selected.line.y2) / 2
+            };
+            const bounds = this.renderer.drawDeleteButton(clickPos.x, clickPos.y, this.input.mouse.x, this.input.mouse.y);
             this.ui.setDeleteButton(bounds);
         } else {
             this.ui.setDeleteButton(null);

@@ -10,6 +10,7 @@ export class UIManager {
         // Selection state
         this.selected = {
             line: null,
+            lineClickPos: null,
             lines: [],
             spawners: []
         };
@@ -78,12 +79,14 @@ export class UIManager {
         this.hovered.endpoint = null;
     }
 
-    selectLine(line) {
+    selectLine(line, clickX, clickY) {
         this.selected.line = line;
+        this.selected.lineClickPos = { x: clickX, y: clickY };
     }
 
     deselectLine() {
         this.selected.line = null;
+        this.selected.lineClickPos = null;
         this.deleteButton = null;
     }
 

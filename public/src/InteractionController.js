@@ -175,7 +175,7 @@ export class InteractionController {
             this.dragging.offsetX = centerX - pos.x;
             this.dragging.offsetY = centerY - pos.y;
 
-            this.ui.selectLine(line);
+            this.ui.selectLine(line, pos.x, pos.y);
             return;
         }
 
