@@ -16,6 +16,3 @@ node_modules
 
 # Lock files (Vercel will use bun.lock)
 bun.lockb
-
-# Build script (used during build, not needed in deployment)
-build.js
