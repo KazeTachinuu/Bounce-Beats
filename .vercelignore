@@ -1,0 +1,21 @@
+# Development files
+index.ts
+tsconfig.json
+README.md
+CLAUDE.md
+
+# Render configuration (no longer needed)
+render.yaml
+
+# Git files
+.git
+.gitignore
+
+# Dependencies (will be installed during build)
+node_modules
+
+# Lock files (Vercel will use bun.lock)
+bun.lockb
+
+# Build script (used during build, not needed in deployment)
+build.js

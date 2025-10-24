@@ -12,12 +12,30 @@ Simple, satisfying music creation game. Draw lines, bounce balls, create lo-fi m
 
 ## Quick Start
 
+### Local Development
+
 ```bash
 bun install
 bun run index.ts
 ```
 
 Open http://localhost:3000
+
+### Deploy to Vercel
+
+The app is configured for zero-config deployment to Vercel:
+
+1. Push to GitHub
+2. Import your repository in Vercel
+3. Vercel will automatically detect the configuration from `vercel.json`
+4. Your app will be live!
+
+Alternatively, use the Vercel CLI:
+
+```bash
+npm i -g vercel
+vercel
+```
 
 ## Controls
 

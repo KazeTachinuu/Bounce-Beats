@@ -6,6 +6,9 @@ out
 dist
 *.tgz
 
+# build artifacts (generated during deployment)
+public/libs
+
 # code coverage
 coverage
 *.lcov
