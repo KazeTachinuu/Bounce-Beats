@@ -10,22 +10,11 @@ export class PhysicsEngine {
         this.engine.constraintIterations = PHYSICS_CONFIG.constraintIterations;
         this.engine.timing.timeScale = 2;
         this.world = this.engine.world;
-        this.fixedTimeStep = 1000 / PHYSICS_CONFIG.fixedTimeStepHz;
-        this.accumulator = 0;
-        this.maxSubSteps = PHYSICS_CONFIG.maxSubSteps;
     }
 
     update(delta = 1000 / 60) {
-        this.accumulator += Math.min(delta, 100);
-
-        let subSteps = 0;
-        while (this.accumulator >= this.fixedTimeStep && subSteps < this.maxSubSteps) {
-            Matter.Engine.update(this.engine, this.fixedTimeStep);
-            this.accumulator -= this.fixedTimeStep;
-            subSteps++;
-        }
-
-        if (subSteps >= this.maxSubSteps) this.accumulator = 0;
+        const cappedDelta = Math.min(delta, 100);
+        Matter.Engine.update(this.engine, cappedDelta);
     }
 
     addBody(body) {

@@ -34,8 +34,6 @@ export const PHYSICS_CONFIG = {
     positionIterations: 20,
     velocityIterations: 16,
     constraintIterations: 4,
-    fixedTimeStepHz: 240,
-    maxSubSteps: 4,
     lineThickness: 12,
     maxBallSpeed: 15
 };
