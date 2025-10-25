@@ -16,8 +16,7 @@ export class PhysicsEngine {
     }
 
     update(delta = 1000 / 60) {
-        delta = Math.min(delta, 1000 / 30);
-        this.accumulator += delta;
+        this.accumulator += Math.min(delta, 100);
 
         let subSteps = 0;
         while (this.accumulator >= this.fixedTimeStep && subSteps < this.maxSubSteps) {
