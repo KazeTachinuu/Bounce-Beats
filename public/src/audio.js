@@ -1,8 +1,8 @@
 import { getNoteFromLength } from './constants.js';
 
 const LOUDNESS_COMPENSATION = {
-    'A2': 2.8, 'C3': 2.5, 'D3': 2.3, 'E3': 2.0,
-    'G3': 1.7, 'A3': 1.5, 'C4': 1.3, 'D4': 1.2,
+    'A2': 2.8, 'C3': 2.1, 'D3': 1.9, 'E3': 1.7,
+    'G3': 1.5, 'A3': 1.4, 'C4': 1.3, 'D4': 1.2,
     'E4': 1.1, 'G4': 1.05, 'A4': 1.0
 };
 
