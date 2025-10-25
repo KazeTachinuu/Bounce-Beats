@@ -1,7 +1,3 @@
-/**
- * InteractionController - Handles interaction logic between input and entities
- * Single place for all "what happens when user does X" logic
- */
 import { INTERACTION_CONFIG } from './constants.js';
 import { CommandHistory } from './CommandHistory.js';
 import {

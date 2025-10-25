@@ -1,7 +1,3 @@
-/**
- * InputController - Handles all user input
- * Single source of truth for mouse/keyboard/touch state
- */
 import { INTERACTION_CONFIG } from './constants.js';
 
 export class InputController {

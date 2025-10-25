@@ -1,24 +1,8 @@
-/**
- * Bounce Beats - Shared Constants
- * Single source of truth for musical configuration
- */
-
 export const MUSIC_CONFIG = {
-    // A minor pentatonic scale (A2-A4)
-    // Frequency range: 110Hz (A2) to 440Hz (A4)
-    // Optimal for web audio - clear bass without muddiness
     notes: ['A2', 'C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'G4', 'A4'],
-
-    // Reference size for note mapping
-    // Line length is mapped to notes using this fixed reference
     maxLineLength: 1200
 };
 
-/**
- * Maps line length to musical note
- * @param {number} length - Line length in pixels
- * @returns {string} - Note name (e.g., 'A3', 'C4')
- */
 export function getNoteFromLength(length) {
     const noteIndex = Math.floor(
         Math.min(length / MUSIC_CONFIG.maxLineLength, 1) *
@@ -27,10 +11,6 @@ export function getNoteFromLength(length) {
     return MUSIC_CONFIG.notes[noteIndex];
 }
 
-/**
- * Physics collision configuration
- * Single source of truth for Matter.js collision filters
- */
 export const COLLISION_CATEGORIES = {
     BALL: 0x0001,
     LINE: 0x0002,
@@ -39,7 +19,7 @@ export const COLLISION_CATEGORIES = {
 
 export const COLLISION_FILTERS = {
     BALL: {
-        group: -1, // Balls don't collide with each other
+        group: -1,
         category: COLLISION_CATEGORIES.BALL,
         mask: COLLISION_CATEGORIES.LINE
     },
@@ -49,46 +29,33 @@ export const COLLISION_FILTERS = {
     }
 };
 
-/**
- * Physics configuration
- */
 export const PHYSICS_CONFIG = {
     gravity: 0.5,
-    positionIterations: 20,      // High precision for anti-tunneling
-    velocityIterations: 16,      // High precision for anti-tunneling
+    positionIterations: 20,
+    velocityIterations: 16,
     constraintIterations: 4,
-    fixedTimeStepHz: 240,        // 240 Hz for maximum accuracy
-    maxSubSteps: 4,              // Prevent physics spiral of death
-    lineThickness: 12,           // Collision body thickness in pixels
-    maxBallSpeed: 15             // Prevent tunneling through lines
+    fixedTimeStepHz: 240,
+    maxSubSteps: 4,
+    lineThickness: 12,
+    maxBallSpeed: 15
 };
 
-/**
- * Interaction thresholds and timings
- * Touch targets are larger for mobile-friendly interaction
- */
 export const INTERACTION_CONFIG = {
-    lineHoverThreshold: 25,       // px (increased for touch)
-    spawnerHoverThreshold: 35,    // px (increased for touch)
-    endpointHoverThreshold: 30,   // px (increased for touch)
-    minDragDistance: 10,          // px before line is created
-    holdThreshold: 500,           // ms to activate hold
-    clickThreshold: 200,          // ms max for click
-    ballSprayInterval: 150        // ms between spray balls
+    lineHoverThreshold: 25,
+    spawnerHoverThreshold: 35,
+    endpointHoverThreshold: 30,
+    minDragDistance: 10,
+    holdThreshold: 500,
+    clickThreshold: 200,
+    ballSprayInterval: 150
 };
 
-/**
- * Collision audio/visual feedback
- */
 export const COLLISION_CONFIG = {
-    cooldownMs: 70,               // Prevent duplicate sounds
-    minSpeedForSound: 0.3,        // Below this no sound
-    flashIntensityDivisor: 8      // For impact flash calculation
+    cooldownMs: 70,
+    minSpeedForSound: 0.3,
+    flashIntensityDivisor: 8
 };
 
-/**
- * Entity limits and intervals
- */
 export const ENTITY_CONFIG = {
     maxSpawners: 5,
     spawnerIntervalMs: 1500,
