@@ -19,7 +19,6 @@ export class InteractionController {
         this.audio = audio;
         this.history = new CommandHistory();
 
-        // Drawing state
         this.drawing = {
             active: false,
             x1: 0,
@@ -28,7 +27,6 @@ export class InteractionController {
             y2: 0
         };
 
-        // Dragging state
         this.dragging = {
             active: false,
             line: null,
@@ -52,10 +50,8 @@ export class InteractionController {
             originalBounds: null
         };
 
-        // Ball spray state
         this.lastBallSpray = 0;
 
-        // Modifier keys
         this.shiftPressed = false;
     }
 
@@ -64,20 +60,17 @@ export class InteractionController {
     handleMouseDown(pos) {
         this.audio.init();
 
-        // Priority 0: Start game if welcome screen is showing
         if (this.ui.isWelcomeShowingTitle()) {
             this.ui.startGame();
             this.entities.startWelcomeBallsFall();
             return;
         }
 
-        // Priority 1: Help icon
         if (this.ui.isPointInHelpIcon(pos.x, pos.y)) {
             this.ui.toggleHelp();
             return;
         }
 
-        // Priority 2: Delete button
         if (this.ui.isPointInDeleteButton(pos.x, pos.y)) {
             const line = this.ui.getSelectedLine();
             if (line) {
@@ -85,7 +78,6 @@ export class InteractionController {
                 this.history.execute(cmd);
             }
 
-            // Also handle multi-delete
             const multi = this.ui.getSelectedMultiple();
             if (multi.lines.length > 0 || multi.spawners.length > 0) {
                 this.entities.removeMultiple(multi.lines, multi.spawners);
@@ -96,7 +88,6 @@ export class InteractionController {
             return;
         }
 
-        // Priority 2: Remove spawner (or adjust rhythm with scroll)
         const spawner = this.ui.hovered.spawner;
         if (spawner && !this.shiftPressed) {
             const cmd = new RemoveSpawnerCommand(this.entities, spawner);
@@ -105,7 +96,6 @@ export class InteractionController {
             return;
         }
 
-        // Priority 3: Resize multiple selection (handles)
         if (this.ui.hasMultipleSelection() && !this.shiftPressed) {
             const resizeHandle = this.ui.findResizeHandle(pos.x, pos.y);
             if (resizeHandle) {
@@ -119,7 +109,6 @@ export class InteractionController {
                 return;
             }
 
-            // Priority 4: Drag multiple selection (inside bounding box)
             const bounds = this.ui.multiSelectionBounds?.bounds;
             if (bounds) {
                 const insideBox = pos.x >= bounds.minX && pos.x <= bounds.maxX &&
@@ -137,14 +126,12 @@ export class InteractionController {
             }
         }
 
-        // Priority 4: Start endpoint drag
         const endpoint = this.ui.hovered.endpoint;
         if (endpoint && !this.shiftPressed) {
             this.dragging.active = true;
             this.dragging.type = 'endpoint';
             this.dragging.line = endpoint.line;
             this.dragging.endpoint = endpoint.endpoint;
-            // Store initial position for undo
             this.dragging.initialX1 = endpoint.line.x1;
             this.dragging.initialY1 = endpoint.line.y1;
             this.dragging.initialX2 = endpoint.line.x2;
@@ -152,20 +139,17 @@ export class InteractionController {
             return;
         }
 
-        // Priority 5: Start line drag (move entire line)
         const line = this.ui.hovered.line;
         if (line && !this.shiftPressed) {
             this.dragging.active = true;
             this.dragging.type = 'line';
             this.dragging.line = line;
 
-            // Store initial position for undo
             this.dragging.initialX1 = line.x1;
             this.dragging.initialY1 = line.y1;
             this.dragging.initialX2 = line.x2;
             this.dragging.initialY2 = line.y2;
 
-            // Calculate offset from mouse to line center
             const centerX = (line.x1 + line.x2) / 2;
             const centerY = (line.y1 + line.y2) / 2;
             this.dragging.offsetX = centerX - pos.x;
@@ -175,7 +159,6 @@ export class InteractionController {
             return;
         }
 
-        // Priority 6: Start area selection (with Shift) or drawing
         if (this.shiftPressed) {
             this.ui.deselectLine();
             this.ui.deselectMultiple();
@@ -194,16 +177,13 @@ export class InteractionController {
     // ==================== MOUSE MOVE ====================
 
     handleMouseMove(pos) {
-        // Update area selection
         if (this.ui.getAreaSelection()) {
             this.ui.updateAreaSelection(pos.x, pos.y);
             return;
         }
 
-        // Update dragging
         if (this.dragging.active) {
             if (this.dragging.type === 'endpoint') {
-                // Drag endpoint
                 this.entities.updateLineEndpoint(
                     this.dragging.line,
                     this.dragging.endpoint,
@@ -211,20 +191,16 @@ export class InteractionController {
                     pos.y
                 );
             } else if (this.dragging.type === 'line') {
-                // Move entire line
                 const line = this.dragging.line;
                 const newCenterX = pos.x + this.dragging.offsetX;
                 const newCenterY = pos.y + this.dragging.offsetY;
 
-                // Calculate current line center
                 const oldCenterX = (line.x1 + line.x2) / 2;
                 const oldCenterY = (line.y1 + line.y2) / 2;
 
-                // Calculate delta
                 const deltaX = newCenterX - oldCenterX;
                 const deltaY = newCenterY - oldCenterY;
 
-                // Move both endpoints
                 this.entities.updateLinePosition(
                     line,
                     line.x1 + deltaX,
@@ -233,7 +209,6 @@ export class InteractionController {
                     line.y2 + deltaY
                 );
             } else if (this.dragging.type === 'multiple') {
-                // Move multiple selection
                 const deltaX = pos.x - this.dragging.startX;
                 const deltaY = pos.y - this.dragging.startY;
 
@@ -247,12 +222,10 @@ export class InteractionController {
                 this.dragging.startX = pos.x;
                 this.dragging.startY = pos.y;
             } else if (this.dragging.type === 'resize') {
-                // Resize multiple selection - simple and clean
                 const handle = this.dragging.resizeHandle;
                 const deltaX = pos.x - this.dragging.startX;
                 const deltaY = pos.y - this.dragging.startY;
 
-                // Calculate new bounds
                 const newBounds = { ...this.dragging.initialBounds };
 
                 // Update only the edges being dragged
@@ -265,7 +238,6 @@ export class InteractionController {
                 if (newBounds.maxX - newBounds.minX < 50) return;
                 if (newBounds.maxY - newBounds.minY < 50) return;
 
-                // Apply resize
                 const multi = this.ui.getSelectedMultiple();
                 this.entities.scaleMultiple(
                     multi.lines,
@@ -282,21 +254,18 @@ export class InteractionController {
             return;
         }
 
-        // Update drawing
         if (this.drawing.active) {
             this.drawing.x2 = pos.x;
             this.drawing.y2 = pos.y;
             return;
         }
 
-        // Update hover states
         this.updateHoverStates(pos);
     }
 
     // ==================== MOUSE UP ====================
 
     handleMouseUp(event) {
-        // Finish area selection
         const areaSelection = this.ui.getAreaSelection();
         if (areaSelection) {
             const bounds = this.ui.getAreaSelectionBounds();
@@ -312,12 +281,10 @@ export class InteractionController {
             return;
         }
 
-        // Finish dragging
         if (this.dragging.active) {
             let cmd = null;
 
             if (this.dragging.type === 'multiple') {
-                // Multi-selection move - create undo command if moved
                 const moved = Math.abs(this.dragging.totalDeltaX) > 0.1 || Math.abs(this.dragging.totalDeltaY) > 0.1;
                 if (moved) {
                     const multi = this.ui.getSelectedMultiple();
@@ -330,7 +297,6 @@ export class InteractionController {
                     );
                 }
             } else if (this.dragging.type === 'resize') {
-                // Multi-selection resize - create undo command
                 const multi = this.ui.getSelectedMultiple();
                 cmd = new ScaleMultipleCommand(
                     this.entities,
@@ -383,20 +349,17 @@ export class InteractionController {
                 }
             }
 
-            // Add command to history if created
             if (cmd) {
                 // Add to history (command already executed during drag)
                 // Don't use execute() since the action already happened
                 this.history.undoStack.push(cmd);
                 this.history.redoStack = [];
 
-                // Enforce max history size
                 if (this.history.undoStack.length > this.history.maxHistorySize) {
                     this.history.undoStack.shift();
                 }
             }
 
-            // Reset dragging state
             this.dragging.active = false;
             this.dragging.line = null;
             this.dragging.endpoint = null;
@@ -420,7 +383,6 @@ export class InteractionController {
                 this.drawing.y2 - this.drawing.y1
             );
 
-            // If dragged enough, create line
             if (dragDistance > INTERACTION_CONFIG.minDragDistance) {
                 this.finishDrawing();
                 return;
@@ -435,7 +397,6 @@ export class InteractionController {
             return;
         }
 
-        // Hold = create spawner
         if (event.isHold) {
             const cmd = new AddSpawnerCommand(this.entities, event.x, event.y);
             this.history.execute(cmd);
@@ -454,22 +415,18 @@ export class InteractionController {
 
         if (cmdKey && key.toLowerCase() === 'z') {
             if (shiftKey) {
-                // Ctrl+Shift+Z = redo
                 this.history.redo();
             } else {
-                // Ctrl+Z = undo
                 this.history.undo();
             }
             return;
         }
 
         if (cmdKey && key.toLowerCase() === 'y') {
-            // Ctrl+Y = redo
             this.history.redo();
             return;
         }
 
-        // Normalize key to lowercase for consistent handling
         const normalizedKey = key.toLowerCase();
 
         const handlers = {

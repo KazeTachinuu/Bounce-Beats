@@ -217,7 +217,6 @@ export class Renderer {
             const maxWidth = Math.max(metrics1.width, metrics2.width);
             const padding = 6;
 
-            // Background box
             this.ctx.fillRect(
                 spawner.x - maxWidth / 2 - padding,
                 spawner.y + 28,
@@ -225,7 +224,6 @@ export class Renderer {
                 38
             );
 
-            // Border
             this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
             this.ctx.lineWidth = 1;
             this.ctx.strokeRect(
@@ -235,7 +233,6 @@ export class Renderer {
                 38
             );
 
-            // Text
             this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
             this.ctx.textAlign = 'center';
             this.ctx.fillText(text1, spawner.x, spawner.y + 42);
@@ -305,7 +302,6 @@ export class Renderer {
         // Pulsing fill for feedback
         const pulse = Math.sin(Date.now() / 150) * 0.03 + 0.1;
 
-        // Fill
         this.ctx.fillStyle = `rgba(100, 200, 255, ${pulse})`;
         this.ctx.fillRect(x1, y1, w, h);
 
@@ -331,7 +327,6 @@ export class Renderer {
     drawMultiSelection(lines, spawners) {
         if (lines.length === 0 && spawners.length === 0) return null;
 
-        // Calculate bounding box
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
         lines.forEach(line => {
@@ -362,7 +357,6 @@ export class Renderer {
         // Pulsing fill for visual feedback
         const pulse = Math.sin(Date.now() / 150) * 0.02 + 0.06;
 
-        // Fill
         this.ctx.fillStyle = `rgba(255, 150, 100, ${pulse})`;
         this.ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
 
@@ -485,7 +479,6 @@ export class Renderer {
             this.ctx.fill();
         }
 
-        // Title
         this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
         this.ctx.font = '600 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
         this.resetTextStyle();

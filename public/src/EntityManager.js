@@ -247,7 +247,6 @@ export class EntityManager {
         const selectedLines = [];
         const selectedSpawners = [];
 
-        // Find lines
         this.lines.forEach(line => {
             const centerX = (line.x1 + line.x2) / 2;
             const centerY = (line.y1 + line.y2) / 2;
@@ -256,7 +255,6 @@ export class EntityManager {
             }
         });
 
-        // Find spawners
         this.spawners.forEach(spawner => {
             if (spawner.x >= x1 && spawner.x <= x2 &&
                 spawner.y >= y1 && spawner.y <= y2) {

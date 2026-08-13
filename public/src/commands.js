@@ -31,7 +31,6 @@ export class RemoveLineCommand extends Command {
         super();
         this.entities = entities;
         this.line = line;
-        // Store line data for undo
         this.x1 = line.x1;
         this.y1 = line.y1;
         this.x2 = line.x2;
@@ -43,7 +42,6 @@ export class RemoveLineCommand extends Command {
     }
 
     undo() {
-        // Recreate the line
         this.line = this.entities.addLine(this.x1, this.y1, this.x2, this.y2);
     }
 }
@@ -56,7 +54,6 @@ export class MoveLineEndpointCommand extends Command {
         this.endpoint = endpoint;
         this.newX = newX;
         this.newY = newY;
-        // Store old position
         this.oldX = endpoint === 'start' ? line.x1 : line.x2;
         this.oldY = endpoint === 'start' ? line.y1 : line.y2;
     }
@@ -75,12 +72,10 @@ export class MoveLineCommand extends Command {
         super();
         this.entities = entities;
         this.line = line;
-        // Store old position
         this.oldX1 = line.x1;
         this.oldY1 = line.y1;
         this.oldX2 = line.x2;
         this.oldY2 = line.y2;
-        // Store new position
         this.newX1 = newX1;
         this.newY1 = newY1;
         this.newX2 = newX2;
@@ -122,7 +117,6 @@ export class RemoveSpawnerCommand extends Command {
         super();
         this.entities = entities;
         this.spawner = spawner;
-        // Store spawner data for undo
         this.x = spawner.x;
         this.y = spawner.y;
     }
@@ -132,7 +126,6 @@ export class RemoveSpawnerCommand extends Command {
     }
 
     undo() {
-        // Recreate the spawner
         this.spawner = this.entities.addSpawner(this.x, this.y);
     }
 }
@@ -152,7 +145,6 @@ export class BatchCommand extends Command {
     }
 
     undo() {
-        // Undo in reverse order
         for (let i = this.commands.length - 1; i >= 0; i--) {
             this.commands[i].undo();
         }
@@ -178,7 +170,6 @@ export class MoveMultipleCommand extends Command {
     }
 
     undo() {
-        // Move back by negative delta
         this.entities.moveMultiple(this.lines, this.spawners, -this.deltaX, -this.deltaY);
     }
 }
@@ -198,7 +189,6 @@ export class ScaleMultipleCommand extends Command {
     }
 
     undo() {
-        // Scale back to old bounds
         this.entities.scaleMultiple(this.lines, this.spawners, this.newBounds, this.oldBounds);
     }
 }
@@ -212,11 +202,9 @@ export class ClearAllCommand extends Command {
     }
 
     execute() {
-        // Store all current lines and spawners
         this.lines = [...this.entities.lines];
         this.spawners = [...this.entities.spawners];
 
-        // Store their data
         this.lineData = this.lines.map(line => ({
             x1: line.x1,
             y1: line.y1,
@@ -229,18 +217,15 @@ export class ClearAllCommand extends Command {
             y: spawner.y
         }));
 
-        // Clear everything
         this.entities.clearLines();
         this.entities.clearSpawners();
     }
 
     undo() {
-        // Recreate all lines
         this.lineData.forEach(data => {
             this.entities.addLine(data.x1, data.y1, data.x2, data.y2);
         });
 
-        // Recreate all spawners
         this.spawnerData.forEach(data => {
             this.entities.addSpawner(data.x, data.y);
         });

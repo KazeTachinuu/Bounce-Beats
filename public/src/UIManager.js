@@ -1,13 +1,11 @@
 export class UIManager {
     constructor() {
-        // Hover states
         this.hovered = {
             line: null,
             spawner: null,
             endpoint: null
         };
 
-        // Selection state
         this.selected = {
             line: null,
             lineClickPos: null,
@@ -15,7 +13,6 @@ export class UIManager {
             spawners: []
         };
 
-        // Area selection
         this.areaSelection = {
             active: false,
             x1: 0,
@@ -24,21 +21,17 @@ export class UIManager {
             y2: 0
         };
 
-        // Multi-selection resize
         this.multiSelectionBounds = null;
         this.resizeHandle = null;
 
-        // UI elements
         this.deleteButton = null;
         this.helpIcon = null;
 
-        // Help overlay
         this.help = {
             visible: false,
             showTime: 0
         };
 
-        // Stats panel
         this.stats = {
             visible: true
         };

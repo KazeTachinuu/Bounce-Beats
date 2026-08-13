@@ -2,10 +2,6 @@
 index.ts
 tsconfig.json
 README.md
-CLAUDE.md
-
-# Render configuration (no longer needed)
-render.yaml
 
 # Git files
 .git

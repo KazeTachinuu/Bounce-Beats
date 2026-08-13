@@ -42,7 +42,6 @@ export class Game {
         this.input.onKeyUp = (key) => this.interaction.handleKeyUp(key);
         this.input.onWheel = (delta, pos) => this.handleWheel(delta, pos);
 
-        // Pause callback for interaction controller
         this.interaction.togglePause = () => this.togglePause();
     }
 
@@ -160,13 +159,11 @@ export class Game {
             this.renderer.drawLine(line, isHovered, isSelected);
         });
 
-        // Render area selection
         const areaSelection = this.ui.getAreaSelection();
         if (areaSelection) {
             this.renderer.drawAreaSelection(areaSelection);
         }
 
-        // Render multi-selection
         const multiSelection = this.ui.getSelectedMultiple();
         const hasMultiSelection = multiSelection.lines.length > 0 || multiSelection.spawners.length > 0;
 
@@ -177,7 +174,6 @@ export class Game {
             this.ui.setMultiSelectionBounds(null);
         }
 
-        // Render drawing preview
         const drawing = this.interaction.getDrawing();
         if (drawing) this.renderer.drawCurrentLine(drawing, this.input.mouse.x, this.input.mouse.y);
 
@@ -200,8 +196,6 @@ export class Game {
         } else if (this.ui.hovered.endpoint && !this.ui.selected.line) {
             this.renderer.drawEndpoints(this.ui.hovered.endpoint.line);
         }
-
-        // Render delete button
 
         if (hasMultiSelection && this.ui.multiSelectionBounds) {
             // Delete button for multi-selection - centered on bounding box
@@ -246,7 +240,6 @@ export class Game {
             this.ui.setHelpIcon(null);
         }
 
-        // Update cursor
         this.input.setCursor(this.ui.getCursor(this.input.mouse.x, this.input.mouse.y));
     }
 

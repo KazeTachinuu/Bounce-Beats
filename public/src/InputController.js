@@ -4,7 +4,6 @@ export class InputController {
     constructor(canvas) {
         this.canvas = canvas;
 
-        // Mouse state
         this.mouse = {
             x: 0,
             y: 0,
@@ -14,7 +13,6 @@ export class InputController {
             downY: 0
         };
 
-        // Bind events
         canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
