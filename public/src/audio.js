@@ -1,7 +1,41 @@
-// A minor pentatonic over three octaves: any combination of notes sounds good together.
-const SCALE = [45, 48, 50, 52, 55, 57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81]; // A2 .. A5
-const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-export const NOTES = SCALE.map((midi) => [NAMES[midi % 12] + (Math.floor(midi / 12) - 1), midi]);
+// ---- music: scale, key, mix ----
+// Lines play notes of the chosen scale over three octaves. The mix sets each note's
+// level in LEVELS steps of 4 dB (0 = muted). Scale, key and mix belong to the song
+// and travel in the share link; the master volume is the listener's own.
+
+export const SCALES = [
+    ['Pentatonic', [0, 3, 5, 7, 10]],
+    ['Major', [0, 2, 4, 5, 7, 9, 11]],
+    ['Minor', [0, 2, 3, 5, 7, 8, 10]],
+    ['Blues', [0, 3, 5, 6, 7, 10]],
+    ['Japanese', [0, 2, 3, 7, 8]],
+];
+export const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export const LEVELS = 8;
+export const DEFAULT_SCALE = 0;
+export const DEFAULT_KEY = 9; // A
+
+export const music = { scale: DEFAULT_SCALE, key: DEFAULT_KEY, levels: [], volume: 1 };
+export let NOTES = [];  // [name, midi], low to high
+
+export function setScale(scale, key) {
+    Object.assign(music, { scale, key });
+    const root = 40 + ((key - 4 + 12) % 12);  // lowest note between E2 and D#3
+    const steps = SCALES[scale][1];
+    const midis = [];
+    for (let octave = 0; octave < 3; octave++) for (const step of steps) midis.push(root + 12 * octave + step);
+    midis.push(root + 36);
+    NOTES = midis.map((midi) => [KEYS[midi % 12] + (Math.floor(midi / 12) - 1), midi]);
+    music.levels = NOTES.map((_, i) => music.levels[i] ?? LEVELS);
+}
+setScale(DEFAULT_SCALE, DEFAULT_KEY);
+
+const levelGain = (level) => (level ? 10 ** (((level - LEVELS) * 4) / 20) : 0);
+
+export function setVolume(volume) {
+    music.volume = volume;
+    master?.gain.setTargetAtTime(volume, ctx.currentTime, 0.03);
+}
 
 const LONGEST_LINE = 1200;      // px, plays the lowest note
 const LISTENING_PHON = 70;      // assumed listening level for loudness compensation
@@ -13,7 +47,7 @@ const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 // Like a string or a bar: frequency is inversely proportional to length.
 // The result is snapped to the nearest note of the scale.
 export function noteFor(length) {
-    const midi = 69 + 12 * Math.log2((hz(45) * LONGEST_LINE) / Math.max(length, 1) / 440);
+    const midi = 69 + 12 * Math.log2((hz(NOTES[0][1]) * LONGEST_LINE) / Math.max(length, 1) / 440);
     let best = NOTES[0];
     for (const note of NOTES) if (Math.abs(note[1] - midi) < Math.abs(best[1] - midi)) best = note;
     return best;
@@ -44,7 +78,7 @@ const loudness = (f) => 10 ** ((equalLoudnessSpl(f, LISTENING_PHON) - REFERENCE_
 
 // ---- engine ----
 
-let ctx, input, click, voices = 0;
+let ctx, master, input, click, voices = 0;
 
 // Must run inside a user gesture: browsers keep audio locked until then.
 export function unlock() {
@@ -52,7 +86,8 @@ export function unlock() {
     ctx = new AudioContext({ latencyHint: 'interactive' });
 
     const limiter = new DynamicsCompressorNode(ctx, { threshold: -14, knee: 8, ratio: 6, attack: 0.003, release: 0.2 });
-    limiter.connect(ctx.destination);
+    master = new GainNode(ctx, { gain: music.volume });
+    limiter.connect(master).connect(ctx.destination);
 
     // Gentle lowpass for a warm, lo-fi top end.
     input = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 5200, Q: 0.5 });
@@ -69,12 +104,14 @@ export function unlock() {
 // A soft mallet note, modelled on a marimba bar: a sine fundamental, the bar's
 // first overtone (tuned two octaves up, so it stays musical), and a short
 // filtered-noise strike. Each partial is loudness-compensated at its own frequency.
-export function play([, midi], impactSpeed, pan = 0) {
-    if (ctx?.state !== 'running' || voices >= MAX_VOICES) return;
+export function play(note, impactSpeed, pan = 0) {
+    const mix = levelGain(music.levels[NOTES.indexOf(note)] ?? LEVELS);
+    if (ctx?.state !== 'running' || voices >= MAX_VOICES || !mix) return;
+    const midi = note[1];
 
     const f = hz(midi);
     const hit = Math.min(Math.sqrt(impactSpeed / 2400), 1);           // 0..1
-    const peak = VOLUME * (0.3 + 0.7 * hit);
+    const peak = VOLUME * mix * (0.3 + 0.7 * hit);
     const ring = 0.2 + (81 - midi) / 120;                              // decay time constant, low notes longer
     const t = ctx.currentTime;
 

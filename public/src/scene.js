@@ -1,4 +1,5 @@
 import { BALL_RADIUS, distToSegment } from './physics.js';
+import { music, setScale, SCALES, KEYS, LEVELS, DEFAULT_SCALE, DEFAULT_KEY } from './audio.js';
 
 export const DEFAULT_INTERVAL = 1500;
 const MIN_LINE_LENGTH = 50;
@@ -80,7 +81,9 @@ function restore(json) {
 // - every number is a delta from the previous point, written as an Exp-Golomb code
 //   (the self-delimiting integer code H.264 uses): small values take few bits;
 // - the encoder tries every code order k and keeps the shortest result.
-// Layout: k(4 bits) worldW worldH lineCount spawnerCount, lines, spawners.
+// Layout: k(4 bits) worldW worldH lineCount spawnerCount, lines, spawners, then a
+// music flag: if set, scale, key and one level per note (stored as LEVELS - level,
+// so the default full level costs a single bit).
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const GRID = 2;            // px
@@ -112,6 +115,7 @@ function bitReader(code) {
     let pos = 0;
     const bit = () => {
         const c = B64.indexOf(code[pos / 6 | 0]);
+        if (pos >= code.length * 6) return pos++, 0;  // past the end reads as 0: older links stay valid
         if (c < 0) throw new Error('Bad scene link');
         return (c >> (5 - pos++ % 6)) & 1;
     };
@@ -139,6 +143,12 @@ function encodeWith(k, [w, h], lines, spawners) {
     for (const [x, y, tempo] of spawners) {
         out.se(x - px, k); out.se(y - py, k); out.se(tempo - DEFAULT_INTERVAL / TEMPO_STEP, 2);
         [px, py] = [x, y];
+    }
+    out.raw(customMusic() ? 1 : 0, 1);
+    if (customMusic()) {
+        out.ue(music.scale, 0);
+        out.raw(music.key, 4);
+        for (const level of music.levels) out.ue(LEVELS - level, 0);
     }
     return out;
 }
@@ -173,12 +183,22 @@ function decode(code) {
         spawners.push([x, y, DEFAULT_INTERVAL / TEMPO_STEP + r.se(2)]);
         [px, py] = [x, y];
     }
-    return { size, lines, spawners };
+    let mix = null;
+    if (r.raw(1)) {
+        const scale = r.ue(0), key = r.raw(4);
+        if (scale >= SCALES.length || key >= KEYS.length) throw new Error('Bad scene link');
+        const count = SCALES[scale][1].length * 3 + 1;
+        mix = { scale, key, levels: Array.from({ length: count }, () => Math.max(0, LEVELS - r.ue(0))) };
+    }
+    return { size, lines, spawners, mix };
 }
 
-function save() {
+const customMusic = () =>
+    music.scale !== DEFAULT_SCALE || music.key !== DEFAULT_KEY || music.levels.some((level) => level !== LEVELS);
+
+export function save() {
     const [lines, spawners] = state();
-    if (!lines.length && !spawners.length) return history.replaceState(null, '', location.pathname);
+    if (!lines.length && !spawners.length && !customMusic()) return history.replaceState(null, '', location.pathname);
     const q = (v) => Math.round(v / GRID);
     const code = encode(
         // Rounded down so the same screen reopens at exactly 1:1.
@@ -194,7 +214,11 @@ function save() {
 export function load() {
     try {
         if (location.hash.length < 2) return false;
-        const { size, lines, spawners } = decode(location.hash.slice(1));
+        const { size, lines, spawners, mix } = decode(location.hash.slice(1));
+        if (mix) {
+            setScale(mix.scale, mix.key);
+            music.levels = mix.levels;
+        }
         Object.assign(world, { w: size[0] * GRID, h: size[1] * GRID, fixed: true });
         apply([lines.map((l) => l.map((v) => v * GRID)), spawners.map(([x, y, t]) => [x * GRID, y * GRID, t * TEMPO_STEP])]);
         return true;

@@ -17,4 +17,8 @@ bun run deploy     # Cloudflare Pages
 - **Shift + drag** to select an area, then move, resize or delete
 - **Cmd+Z / Shift+Cmd+Z** (Ctrl on Windows/Linux) undo / redo, **Space** pause, **C** clear, **X** clear balls, **T** stats, **M** menu
 
-Your scene is saved in the URL, so the link shares it.
+## Music
+
+Open **Music** (the equalizer button, or **E**) to pick a scale and key, and set each note's level: drag across the bars to paint them, drag to the bottom to mute a note, double-click to reset. Bars light up as their notes play.
+
+Your scene, scale, key and mix are saved in the URL, so the link shares the whole song.

@@ -4,6 +4,7 @@ import { play, noteFor, NOTES } from './audio.js';
 import * as render from './render.js';
 import { initInput, ui, select, selectionBox, deleteSelection, cursor } from './input.js';
 import { titleBalls } from './intro.js';
+import { initMixer } from './mixer.js';
 
 const HIT_COOLDOWN_MS = 70;
 const MIN_SOUND_SPEED = 72;   // px/s of normal impact
@@ -54,6 +55,7 @@ const actions = {
         toggled('stats', !stats.hidden);
     },
     menu: () => menu.togglePopover(),
+    mixer: () => $('mixer').togglePopover(),
     async share() {
         const url = location.href;
         if (navigator.share && matchMedia('(pointer: coarse)').matches) return navigator.share({ title: document.title, url }).catch(() => {});
@@ -73,6 +75,7 @@ if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
 
 render.init(canvas);
 const shared = load();
+const mixer = initMixer($('mixer'));
 initInput(canvas, game);
 deleteButton.addEventListener('click', deleteSelection);
 confirmClear.addEventListener('close', () => {
@@ -119,6 +122,7 @@ function onHit(ball, line, speed) {
 
     const note = noteFor(Math.hypot(line.x2 - line.x1, line.y2 - line.y1));
     play(note, speed, pan);
+    mixer.pulse(note, Math.min(speed / 1200, 1));
     line.glow = Math.min((line.glow ?? 0) + speed / 1200, 1);
     line.hue = render.hueFor(note);
     render.flash(ball.x, ball.y, Math.min(speed / 1920, 1));

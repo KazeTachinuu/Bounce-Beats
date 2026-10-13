@@ -97,8 +97,8 @@ export function initInput(canvas, game) {
     }, { passive: false });
 
     addEventListener('keydown', (e) => {
-        // Inside a dialog, keys belong to its buttons (Enter, Space, Escape).
-        if (e.target instanceof Element && e.target.closest('dialog')) return;
+        // Inside a dialog or the music panel, keys belong to its controls.
+        if (e.target instanceof Element && e.target.closest('dialog, #mixer')) return;
         const key = e.key.toLowerCase();
         const action = e.ctrlKey || e.metaKey
             ? { z: e.shiftKey ? 'redo' : 'undo', y: 'redo' }[key]
@@ -112,7 +112,7 @@ export function initInput(canvas, game) {
 
 const KEYS = {
     delete: 'delete', backspace: 'delete', escape: 'deselect',
-    c: 'clearAll', x: 'clearBalls', ' ': 'pause', h: 'menu', m: 'menu', t: 'stats',
+    c: 'clearAll', x: 'clearBalls', ' ': 'pause', h: 'menu', m: 'menu', t: 'stats', e: 'mixer',
 };
 
 // Decides what a press does, by priority.
