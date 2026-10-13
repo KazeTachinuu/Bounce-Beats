@@ -12,13 +12,8 @@ export const SCALES = [
     ['Pentatonic', [0, 3, 5, 7, 10]],      // minor pentatonic
     ['Major', [0, 2, 4, 5, 7, 9, 11]],
     ['Minor', [0, 2, 3, 5, 7, 8, 10]],     // natural minor
-    ['Blues', [0, 3, 5, 6, 7, 10]],        // minor pentatonic plus the flat 5th
-    ['Hirajoshi', [0, 2, 3, 7, 8]],        // a Japanese pentatonic
     ['Lo-fi', [0, 2, 3, 5, 7, 9, 10], { tone: 2200 }],  // Dorian, the jazzy minor of lo-fi hip-hop
-    ['Arabic', [0, 1, 4, 5, 7, 8, 10]],    // Hijaz (Phrygian dominant)
-    ['Chinese', [0, 2, 4, 7, 9]],          // major pentatonic
-    ['Dreamy', [0, 2, 4, 6, 7, 9, 11]],    // Lydian
-    ['Spanish', [0, 1, 3, 5, 7, 8, 10]],   // Phrygian
+    ['Japanese', [0, 2, 3, 7, 8]],         // Hirajoshi
 ];
 const BRIGHT_TONE = 5200;  // Hz, the default lowpass: warm but clear
 const tone = () => SCALES[music.scale][2]?.tone ?? BRIGHT_TONE;
@@ -88,7 +83,7 @@ const loudness = (f) => 10 ** ((equalLoudnessSpl(f, LISTENING_PHON) - REFERENCE_
 
 // ---- engine ----
 
-export const INSTRUMENTS = ['Marimba', 'Bell', 'Pluck', 'Keys', 'Kalimba', 'Steel drum', 'Synth'];
+export const INSTRUMENTS = ['Marimba', 'Bell', 'Keys', 'Synth'];
 
 // Must run inside a user gesture: browsers keep audio locked until then.
 export function unlock() {
@@ -116,11 +111,8 @@ export function unlock() {
 //           short filtered-noise strike.
 //  Bell:    the partials of a free metal bar, as in a glockenspiel (1 : 2.756 : 5.404),
 //           with a long ring.
-//  Pluck:   a bright sawtooth through a lowpass that closes fast, like a plucked string.
 //  Keys:    FM electric piano: a sine carrier modulated at the same frequency, with
 //           the modulation fading quickly (bright attack, mellow tail), as in DX-style pianos.
-//  Kalimba: a sine tine with its high, slightly inharmonic overtone and a woody click.
-//  Steel drum: harmonic partials 1 : 2 : 3, as a steel pan is tuned, the upper ones fading first.
 //  Synth:   a square wave, chiptune style, softened by a lowpass.
 export function play(note, impactSpeed, pan = 0) {
     const mix = levelGain(music.levels[NOTES.indexOf(note)] ?? LEVELS);
@@ -163,12 +155,6 @@ export function play(note, impactSpeed, pan = 0) {
         strike(sine(f * 5.404), peak * 0.18 * hit * loudness(f * 5.404), ring * 0.4);
         tick(peak * 0.15 * hit);
     } else if (music.instrument === 2) {
-        const saw = new OscillatorNode(ctx, { type: 'sawtooth', frequency: f, detune: (Math.random() - 0.5) * 4 });
-        const tone = new BiquadFilterNode(ctx, { type: 'lowpass', Q: 2 });
-        tone.frequency.setValueAtTime(Math.min(f * (4 + 8 * hit), 9000), t);
-        tone.frequency.setTargetAtTime(f * 1.5, t, 0.06 + ring * 0.1);
-        body = strike(saw, peak * 0.45 * loudness(f), ring * 0.9, saw.connect(tone));
-    } else if (music.instrument === 3) {
         const carrier = sine(f);
         const modulator = sine(f);
         const depth = new GainNode(ctx, { gain: 0 });
@@ -178,16 +164,7 @@ export function play(note, impactSpeed, pan = 0) {
         modulator.start(t);
         modulator.stop(t + ring * 10);
         body = strike(carrier, peak * 0.7 * loudness(f), ring * 2);
-    } else if (music.instrument === 4) {
-        body = strike(sine(f), peak * 0.9 * loudness(f), ring * 1.2);
-        strike(sine(f * 5.93), peak * 0.2 * hit * loudness(f * 5.93), 0.04);
-        tick(peak * 0.5 * hit);
-    } else if (music.instrument === 5) {
-        body = strike(sine(f), peak * 0.7 * loudness(f), ring * 1.6);
-        strike(sine(f * 2), peak * 0.45 * loudness(f * 2), ring * 0.9);
-        strike(sine(f * 3), peak * 0.25 * hit * loudness(f * 3), ring * 0.4);
-        tick(peak * 0.2 * hit);
-    } else if (music.instrument === 6) {
+    } else if (music.instrument === 3) {
         const square = new OscillatorNode(ctx, { type: 'square', frequency: f });
         const soften = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: Math.min(f * 6, 6000), Q: 0.7 });
         body = strike(square, peak * 0.3 * loudness(f), ring * 0.8, square.connect(soften));
