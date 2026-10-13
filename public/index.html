@@ -1,57 +1,389 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Bounce Beats</title>
+    <meta name="description" content="Draw lines, drop balls, make lo-fi melodies.">
+    <link rel="canonical" href="https://bounce-beats.pages.dev/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Bounce Beats">
+    <meta property="og:url" content="https://bounce-beats.pages.dev/">
+    <meta property="og:title" content="Bounce Beats">
+    <meta property="og:description" content="Draw lines, drop balls, make lo-fi melodies.">
+    <meta property="og:image" content="https://bounce-beats.pages.dev/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Bounce Beats: the title in white dots above a glowing line with a ball bouncing off it">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="theme-color" content="#000">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="modulepreload" href="src/scene.js">
+    <link rel="modulepreload" href="src/physics.js">
+    <link rel="modulepreload" href="src/audio.js">
+    <link rel="modulepreload" href="src/input.js">
+    <link rel="modulepreload" href="src/render.js">
+    <link rel="modulepreload" href="src/intro.js">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+        /* Scale: phi = 1.618. Space and type step by phi (sqrt(phi) for in-between sizes). */
+        :root {
+            color-scheme: dark;
+            --phi: 1.618;
+            --s-2: calc(var(--s-1) / var(--phi));   /* ~6px  */
+            --s-1: calc(var(--s0) / var(--phi));    /* ~9px  */
+            --s0: 15px;
+            --s1: calc(var(--s0) * var(--phi));     /* ~24px */
+            --s2: calc(var(--s1) * var(--phi));     /* ~39px */
+            --t-small: calc(var(--s0) / 1.272);     /* ~12px */
+            --t-body: var(--s0);
+            --t-title: var(--s1);
+            --tap: 44px;                            /* minimum touch target */
+            --fast: 146ms;
+            --slow: 382ms;
+            --ease: cubic-bezier(.2, .8, .2, 1);
+            --fg: #fff;
+            --muted: rgb(255 255 255 / .55);
+            --faint: rgb(255 255 255 / .1);
+            --hover: rgb(255 255 255 / .07);
+            --panel: rgb(22 22 24 / .82);
+            --accent: rgb(140 200 255);
+            --danger: rgb(255 90 90);
+            --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        [hidden] { display: none !important; }
+
         html, body {
-            position: fixed;
-            width: 100%;
             height: 100%;
             overflow: hidden;
             overscroll-behavior: none;
-        }
-
-        body {
             background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--fg);
+            font: var(--t-body)/1.5 system-ui, -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        canvas {
-            display: block;
-            cursor: crosshair;
+        #stage {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
             touch-action: none;
         }
 
+        button {
+            font: inherit;
+            color: inherit;
+            background: none;
+            border: 0;
+            cursor: pointer;
+        }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        kbd {
+            font: 500 var(--t-small) var(--mono);
+            color: var(--muted);
+            letter-spacing: .02em;
+        }
+
+        .glass {
+            background: var(--panel);
+            backdrop-filter: blur(20px) saturate(1.4);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            box-shadow: inset 0 0 0 1px var(--faint), 0 var(--s-1) var(--s2) rgb(0 0 0 / .45);
+        }
+
+        /* Show "Click"/"Scroll"/shortcuts only with a mouse, "Tap" only on touch. */
+        @media (pointer: coarse) { .fine { display: none !important; } }
+        @media (pointer: fine) { .coarse { display: none !important; } }
+
+        /* ---- title ---- */
+
+        #hint {
+            position: fixed;
+            inset: auto 0 calc(var(--s2) + env(safe-area-inset-bottom)) 0;
+            text-align: center;
+            font: var(--t-small) var(--mono);
+            letter-spacing: .12em;
+            color: var(--muted);
+            pointer-events: none;
+            animation: breathe 2.6s var(--ease) infinite alternate;
+            transition: opacity var(--slow) var(--ease);
+        }
+        [data-phase] #hint { animation: none; opacity: 0; }
+        @keyframes breathe { from { opacity: .35; } to { opacity: .85; } }
+
+        /* ---- HUD (only once playing) ---- */
+
+        .hud { transition: opacity var(--slow) var(--ease); }
+        body:not([data-phase="play"]) .hud { opacity: 0; pointer-events: none; }
+
+        #tips {
+            position: fixed;
+            inset: auto var(--s2) calc(var(--s1) + env(safe-area-inset-bottom));
+            text-align: center;
+            font-size: var(--t-small);
+            color: var(--muted);
+            pointer-events: none;
+            transition: opacity var(--slow) var(--ease);
+        }
+        #tips { display: flex; justify-content: center; flex-wrap: wrap; gap: 0 var(--s1); }
+        body:not([data-empty]) #tips { opacity: 0; }
+
+        #menu-button {
+            position: fixed;
+            right: calc(var(--s1) + env(safe-area-inset-right));
+            bottom: calc(var(--s1) + env(safe-area-inset-bottom));
+            display: grid;
+            place-items: center;
+            width: var(--tap);
+            height: var(--tap);
+            border-radius: 50%;
+            transition: scale var(--fast) var(--ease);
+        }
+        #menu-button:active { scale: .9; }
+        #menu-button .i { width: 18px; height: 18px; opacity: .9; }
+
+        #stats {
+            position: fixed;
+            top: calc(var(--s1) + env(safe-area-inset-top));
+            right: calc(var(--s1) + env(safe-area-inset-right));
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 0 var(--s1);
+            padding: var(--s-1) var(--s0);
+            border-radius: var(--s-1);
+            font: var(--t-small)/1.8 var(--mono);
+            pointer-events: none;
+        }
+        #stats dt { color: var(--muted); }
+        #stats dd { text-align: right; font-variant-numeric: tabular-nums; }
+
+        #delete {
+            position: fixed;
+            left: 0;
+            top: 0;
+            transform: translate(-50%, -100%);
+            min-height: 32px;
+            padding: 0 var(--s0);
+            border-radius: 99px;
+            background: var(--danger);
+            font-size: var(--t-small);
+            font-weight: 600;
+            letter-spacing: .02em;
+            box-shadow: 0 var(--s-2) var(--s1) rgb(0 0 0 / .5);
+            transition: scale var(--fast) var(--ease);
+        }
+        #delete:hover { scale: 1.06; }
+        #delete:active { scale: .94; }
+
+        #paused {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: rgb(0 0 0 / .35);
+            font: var(--t-small) var(--mono);
+            letter-spacing: .4em;
+            color: var(--muted);
+            pointer-events: none;
+        }
+
+        /* ---- menu: opens above its button, like a native menu ---- */
+
+        #menu {
+            inset: auto calc(var(--s1) + env(safe-area-inset-right)) calc(var(--s1) + var(--tap) + var(--s-1) + env(safe-area-inset-bottom)) auto;
+            margin: 0;
+            width: min(17rem, 100vw - 2 * var(--s1));
+            max-height: calc(100dvh - 2 * var(--tap));
+            overflow: auto;
+            padding: var(--s-2);
+            border: 0;
+            border-radius: var(--s0);
+            color: var(--fg);
+            transform-origin: bottom right;
+            opacity: 0;
+            scale: .96;
+            translate: 0 var(--s-2);
+            transition: opacity var(--fast) var(--ease), scale var(--fast) var(--ease), translate var(--fast) var(--ease),
+                overlay var(--fast) allow-discrete, display var(--fast) allow-discrete;
+        }
+        #menu:popover-open { opacity: 1; scale: 1; translate: 0 0; }
+        @starting-style { #menu:popover-open { opacity: 0; scale: .96; translate: 0 var(--s-2); } }
+
+        #menu header { padding: var(--s-1) var(--s-1) var(--s-2); }
+        #menu h2 { font-size: var(--t-body); font-weight: 600; }
+        #menu header p { font-size: var(--t-small); color: var(--muted); }
+
+        #menu hr { border: 0; height: 1px; background: var(--faint); margin: var(--s-2) var(--s-1); }
+
+        .row, .pair button {
+            display: flex;
+            align-items: center;
+            gap: var(--s-1);
+            width: 100%;
+            min-height: 36px;
+            padding: 0 var(--s-1);
+            border-radius: var(--s-1);
+            text-align: left;
+            white-space: nowrap;
+        }
+        @media (pointer: coarse) { .row, .pair button { min-height: var(--tap); } }
+        .row kbd, .pair kbd { margin-left: auto; }
+        #menu ul { list-style: none; }
+
+        .i {
+            flex: none;
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: .75;
+        }
+        [aria-pressed="false"] .on, [aria-pressed="true"] .off { display: none; }
+        #menu li.row { min-height: 30px; font-size: var(--t-small); color: var(--muted); }
+        #menu li.row kbd { color: rgb(255 255 255 / .35); }
+
+        button.row, .pair button { transition: background var(--fast) var(--ease); }
+        button.row:hover, .pair button:hover { background: var(--hover); }
+        button.row:active, .pair button:active { background: rgb(255 255 255 / .12); }
+
+        .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+
+        button[aria-pressed="true"] { color: var(--accent); }
+        button[aria-pressed="true"] kbd { color: var(--accent); opacity: .7; }
+        button[data-action="clearAll"] { color: var(--danger); }
+
+        /* ---- confirmation ---- */
+
+        #confirm-clear {
+            margin: auto;
+            width: min(20rem, 100vw - 2 * var(--s1));
+            padding: var(--s1);
+            border: 0;
+            border-radius: var(--s0);
+            color: var(--fg);
+            opacity: 0;
+            scale: .96;
+            transition: opacity var(--fast) var(--ease), scale var(--fast) var(--ease),
+                overlay var(--fast) allow-discrete, display var(--fast) allow-discrete;
+        }
+        #confirm-clear[open] { opacity: 1; scale: 1; }
+        @starting-style { #confirm-clear[open] { opacity: 0; scale: .96; } }
+        #confirm-clear::backdrop { background: rgb(0 0 0 / .45); }
+
+        #confirm-clear h2 { font-size: var(--t-body); font-weight: 600; }
+        #confirm-clear p { margin-top: var(--s-2); font-size: var(--t-small); color: var(--muted); }
+        .choices { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); margin-top: var(--s1); }
+        .choices button {
+            min-height: 36px;
+            border-radius: var(--s-1);
+            background: rgb(255 255 255 / .08);
+            font-weight: 500;
+            transition: background var(--fast) var(--ease), scale var(--fast) var(--ease);
+        }
+        .choices button:hover { background: rgb(255 255 255 / .14); }
+        .choices button:active { scale: .97; }
+        .choices .danger { background: var(--danger); }
+        .choices .danger:hover { background: rgb(255 110 110); }
+        @media (pointer: coarse) { .choices button { min-height: var(--tap); } }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after { animation: none !important; transition-duration: 0s !important; }
+        }
     </style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
+    <canvas id="stage" aria-label="Bounce Beats: draw lines and drop balls to make music"></canvas>
 
-    <script src="/libs/matter.min.js"></script>
-    <script src="/libs/Tone.js"></script>
+    <p id="hint"><span class="fine">click</span><span class="coarse">tap</span> to start</p>
 
-    <script type="module">
-        import { Game } from './src/game.js';
+    <div class="hud">
+        <p id="tips">
+            <span>drag to draw</span><span><span class="fine">click</span><span class="coarse">tap</span> to drop</span><span>hold for a spawner</span>
+        </p>
+        <button id="menu-button" class="glass" popovertarget="menu" aria-label="Menu">
+            <svg class="i" viewBox="0 0 20 20"><path d="M4 7h12M4 13h12"/></svg>
+        </button>
+        <dl id="stats" class="glass" hidden>
+            <dt>Lines</dt><dd><output id="stat-lines">0</output></dd>
+            <dt>Balls</dt><dd><output id="stat-balls">0</output></dd>
+            <dt>Spawners</dt><dd><output id="stat-spawners">0</output></dd>
+            <dt>FPS</dt><dd><output id="stat-fps">0</output></dd>
+        </dl>
+    </div>
 
-        const canvas = document.getElementById('canvas');
-        const game = new Game(canvas);
-    </script>
+    <button id="delete" hidden>Delete</button>
+    <div id="paused" hidden>PAUSED</div>
+
+    <nav id="menu" class="glass" popover aria-label="Menu">
+        <header>
+            <h2>Bounce Beats</h2>
+            <p>Longer lines play lower notes.</p>
+        </header>
+        <ul>
+            <li class="row"><span>Drop a ball</span><kbd><span class="fine">Click</span><span class="coarse">Tap</span></kbd></li>
+            <li class="row"><span>Draw a line</span><kbd>Drag</kbd></li>
+            <li class="row"><span>Place a spawner</span><kbd>Hold</kbd></li>
+            <li class="row fine"><span>Spawner tempo</span><kbd>Scroll</kbd></li>
+            <li class="row fine"><span>Select an area</span><kbd>Shift+Drag</kbd></li>
+        </ul>
+        <hr>
+        <div class="pair">
+            <button data-action="undo" title="Undo (Cmd+Z)" data-mod>
+                <svg class="i" viewBox="0 0 20 20"><path d="M8 4 4 8l4 4"/><path d="M4 8h8.5a3.5 3.5 0 0 1 0 7H10"/></svg>
+                <span>Undo</span>
+            </button>
+            <button data-action="redo" title="Redo (Shift+Cmd+Z)" data-mod>
+                <svg class="i" viewBox="0 0 20 20"><path d="m12 4 4 4-4 4"/><path d="M16 8H7.5a3.5 3.5 0 0 0 0 7H10"/></svg>
+                <span>Redo</span>
+            </button>
+        </div>
+        <button class="row" data-action="pause" aria-pressed="false">
+            <svg class="i off" viewBox="0 0 20 20"><path d="M7.5 5v10M12.5 5v10"/></svg>
+            <svg class="i on" viewBox="0 0 20 20"><path d="M7 5.2v9.6a.6.6 0 0 0 .9.5l7.4-4.8a.6.6 0 0 0 0-1L7.9 4.7a.6.6 0 0 0-.9.5Z"/></svg>
+            <span class="off">Pause</span><span class="on">Resume</span><kbd class="fine">Space</kbd>
+        </button>
+        <button class="row" data-action="stats" aria-pressed="false">
+            <svg class="i" viewBox="0 0 20 20"><path d="M5 15v-4M10 15V5M15 15V8"/></svg>
+            <span>Stats</span><kbd class="fine">T</kbd>
+        </button>
+        <button class="row" data-action="share">
+            <svg class="i" viewBox="0 0 20 20"><path d="M8.5 11.5l3-3"/><path d="m9.3 6.2.9-.9a3 3 0 0 1 4.3 4.3l-.9.9"/><path d="m10.7 13.8-.9.9a3 3 0 0 1-4.3-4.3l.9-.9"/></svg>
+            <span class="label">Copy share link</span>
+        </button>
+        <hr>
+        <div class="pair">
+            <button data-action="clearBalls" title="Clear balls (X)">
+                <svg class="i" viewBox="0 0 20 20"><circle cx="7" cy="12.5" r="2.5"/><circle cx="13" cy="7.5" r="2.5"/></svg>
+                <span>Clear balls</span>
+            </button>
+            <button data-action="clearAll" title="Clear all (C)">
+                <svg class="i" viewBox="0 0 20 20"><path d="M4.5 6h11M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6"/></svg>
+                <span>Clear all</span>
+            </button>
+        </div>
+    </nav>
+
+    <dialog id="confirm-clear" class="glass" aria-labelledby="confirm-title">
+        <form method="dialog">
+            <h2 id="confirm-title">Clear everything?</h2>
+            <p>All lines and spawners will be removed. You can undo this.</p>
+            <div class="choices">
+                <button value="cancel" autofocus>Cancel</button>
+                <button value="clear" class="danger">Clear all</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script type="module" src="src/main.js"></script>
 </body>
 </html>

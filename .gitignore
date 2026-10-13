@@ -6,8 +6,6 @@ out
 dist
 *.tgz
 
-# build artifacts (generated during deployment)
-public/libs
 
 # code coverage
 coverage
@@ -35,3 +33,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Cloudflare wrangler cache
+.wrangler

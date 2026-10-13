@@ -1,69 +1,125 @@
-import { getNoteFromLength } from './constants.js';
+// A minor pentatonic over three octaves: any combination of notes sounds good together.
+const SCALE = [45, 48, 50, 52, 55, 57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81]; // A2 .. A5
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export const NOTES = SCALE.map((midi) => [NAMES[midi % 12] + (Math.floor(midi / 12) - 1), midi]);
 
-const LOUDNESS_COMPENSATION = {
-    'A2': 2.8, 'C3': 2.1, 'D3': 1.9, 'E3': 1.7,
-    'G3': 1.5, 'A3': 1.4, 'C4': 1.3, 'D4': 1.2,
-    'E4': 1.1, 'G4': 1.05, 'A4': 1.0
-};
+const LONGEST_LINE = 1200;      // px, plays the lowest note
+const LISTENING_PHON = 70;      // assumed listening level for loudness compensation
+const MAX_VOICES = 16;
+const VOLUME = 0.1;
 
-export class AudioEngine {
-    constructor() {
-        this.isInitialized = false;
-        this.synth = null;
-        this.effects = null;
-    }
+const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
-    async init() {
-        if (this.isInitialized) return;
+// Like a string or a bar: frequency is inversely proportional to length.
+// The result is snapped to the nearest note of the scale.
+export function noteFor(length) {
+    const midi = 69 + 12 * Math.log2((hz(45) * LONGEST_LINE) / Math.max(length, 1) / 440);
+    let best = NOTES[0];
+    for (const note of NOTES) if (Math.abs(note[1] - midi) < Math.abs(best[1] - midi)) best = note;
+    return best;
+}
 
-        await Tone.start();
+// ---- equal loudness, ISO 226:2003 ----
+// SPL a pure tone needs to sound as loud as `phon` (a 1 kHz tone at `phon` dB).
+// Table rows 100 Hz .. 2 kHz, interpolated on a log-frequency axis.
 
-        const compressor = new Tone.Compressor({
-            threshold: -24, ratio: 4, attack: 0.005, release: 0.25, knee: 6
-        });
-        const filter = new Tone.Filter({
-            type: 'lowpass', frequency: 3500, rolloff: -12, Q: 0.7
-        });
+const ISO_F = [100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000];
+const ISO_AF = [0.367, 0.349, 0.330, 0.315, 0.301, 0.288, 0.276, 0.267, 0.259, 0.253, 0.250, 0.246, 0.244, 0.243];
+const ISO_LU = [-8.1, -6.2, -4.5, -3.1, -2.0, -1.1, -0.4, 0.0, 0.3, 0.5, 0.0, -2.7, -4.1, -1.0];
+const ISO_TF = [26.5, 22.1, 17.9, 14.4, 11.4, 8.6, 6.2, 4.4, 3.0, 2.2, 2.4, 3.5, 1.7, -1.3];
 
-        const chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.3, wet: 0.25 }).start();
-        const reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.35 });
+function equalLoudnessSpl(f, phon) {
+    f = Math.min(Math.max(f, ISO_F[0]), ISO_F.at(-1));
+    const i = Math.max(0, ISO_F.findIndex((x) => x >= f) - 1);
+    const t = Math.log(f / ISO_F[i]) / Math.log(ISO_F[i + 1] / ISO_F[i]);
+    const at = (row) => row[i] + (row[i + 1] - row[i]) * t;
+    const af = at(ISO_AF), lu = at(ISO_LU), tf = at(ISO_TF);
+    const a = 4.47e-3 * (10 ** (0.025 * phon) - 1.15) + (0.4 * 10 ** ((tf + lu) / 10 - 9)) ** af;
+    return (10 / af) * Math.log10(a) - lu + 94;
+}
 
-        await reverb.ready;
+// Linear gain that makes a sine at `f` sound as loud as one at 1 kHz.
+const REFERENCE_SPL = equalLoudnessSpl(1000, LISTENING_PHON);
+const loudness = (f) => 10 ** ((equalLoudnessSpl(f, LISTENING_PHON) - REFERENCE_SPL) / 20);
 
-        filter.connect(chorus);
-        chorus.connect(reverb);
-        reverb.connect(compressor);
-        compressor.toDestination();
+// ---- engine ----
 
-        this.synth = new Tone.PolySynth(Tone.Synth, {
-            maxPolyphony: 8,
-            oscillator: { type: 'triangle' },
-            envelope: { attack: 0.02, attackCurve: 'exponential', decay: 0.3, sustain: 0.2, release: 0.6, releaseCurve: 'exponential' },
-            volume: -12
-        });
+let ctx, input, click, voices = 0;
 
-        this.synth.connect(filter);
-        this.effects = { compressor, filter, chorus, reverb };
-        this.isInitialized = true;
-    }
+// Must run inside a user gesture: browsers keep audio locked until then.
+export function unlock() {
+    if (ctx) return ctx.resume();
+    ctx = new AudioContext({ latencyHint: 'interactive' });
 
-    playNote(lineLength, impactSpeed) {
-        if (!this.isInitialized) return;
+    const limiter = new DynamicsCompressorNode(ctx, { threshold: -14, knee: 8, ratio: 6, attack: 0.003, release: 0.2 });
+    limiter.connect(ctx.destination);
 
-        const note = getNoteFromLength(lineLength);
-        const detune = (Math.random() - 0.5) * 10;
-        const baseVelocity = Math.pow(impactSpeed / 12, 0.5) * 0.5 + 0.15;
-        const velocity = Math.min(baseVelocity * (LOUDNESS_COMPENSATION[note] || 1.0), 1);
-        const duration = Math.random() * 0.1 + 0.3;
+    // Gentle lowpass for a warm, lo-fi top end.
+    input = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 5200, Q: 0.5 });
+    input.connect(limiter);
 
-        this.synth.triggerAttackRelease(note, duration, undefined, velocity);
-        this.synth.set({ detune });
-    }
+    click = new AudioBuffer({ length: Math.round(ctx.sampleRate * 0.03), sampleRate: ctx.sampleRate });
+    click.getChannelData(0).forEach((_, i, data) => { data[i] = Math.random() * 2 - 1; });
 
-    dispose() {
-        if (this.synth) this.synth.dispose();
-        if (this.effects) {
-            Object.values(this.effects).forEach(effect => effect.dispose());
+    const preDelay = new DelayNode(ctx, { delayTime: 0.018 });
+    const reverb = new ConvolverNode(ctx, { buffer: room(2.4) });
+    input.connect(preDelay).connect(reverb).connect(new GainNode(ctx, { gain: 0.3 })).connect(limiter);
+}
+
+// A soft mallet note, modelled on a marimba bar: a sine fundamental, the bar's
+// first overtone (tuned two octaves up, so it stays musical), and a short
+// filtered-noise strike. Each partial is loudness-compensated at its own frequency.
+export function play([, midi], impactSpeed, pan = 0) {
+    if (ctx?.state !== 'running' || voices >= MAX_VOICES) return;
+
+    const f = hz(midi);
+    const hit = Math.min(Math.sqrt(impactSpeed / 2400), 1);           // 0..1
+    const peak = VOLUME * (0.3 + 0.7 * hit);
+    const ring = 0.2 + (81 - midi) / 120;                              // decay time constant, low notes longer
+    const t = ctx.currentTime;
+
+    const out = new StereoPannerNode(ctx, { pan: Math.max(-1, Math.min(1, pan)) * 0.6 });
+    out.connect(input);
+
+    // Percussive envelope (3ms attack, exponential decay) on `tail`, the last node of
+    // the source's chain. The source stops once the note is inaudible.
+    const strike = (source, gain, tau, tail = source) => {
+        const env = new GainNode(ctx, { gain: 0 });
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(gain, t + 0.003);
+        env.gain.setTargetAtTime(0, t + 0.003, tau);
+        tail.connect(env).connect(out);
+        source.start(t);
+        source.stop(t + 0.003 + tau * 5);
+        return source;
+    };
+    const sine = (freq) => new OscillatorNode(ctx, { frequency: freq, detune: (Math.random() - 0.5) * 4 });
+
+    const body = strike(sine(f), peak * loudness(f), ring);
+    strike(sine(f * 4), peak * 0.12 * hit * loudness(f * 4), ring * 0.12);
+    const noise = new AudioBufferSourceNode(ctx, { buffer: click });
+    const band = new BiquadFilterNode(ctx, { type: 'bandpass', frequency: Math.min(f * 8, 4000), Q: 1.2 });
+    strike(noise, peak * 0.35 * hit, 0.004, noise.connect(band));
+
+    voices++;
+    body.onended = () => {
+        voices--;
+        out.disconnect();
+    };
+}
+
+// Stereo noise that decays and darkens over time, like a real room.
+function room(seconds) {
+    const length = Math.round(ctx.sampleRate * seconds);
+    const buffer = new AudioBuffer({ length, numberOfChannels: 2, sampleRate: ctx.sampleRate });
+    for (let c = 0; c < 2; c++) {
+        const data = buffer.getChannelData(c);
+        let lowpassed = 0;
+        for (let i = 0; i < length; i++) {
+            const k = i / length;
+            lowpassed += (Math.random() * 2 - 1 - lowpassed) * (0.7 - 0.62 * k);
+            data[i] = lowpassed * Math.exp(-6.9 * k);
         }
     }
+    return buffer;
 }
