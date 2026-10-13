@@ -72,7 +72,7 @@ if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
 }
 
 render.init(canvas);
-load();
+const shared = load();
 initInput(canvas, game);
 deleteButton.addEventListener('click', deleteSelection);
 confirmClear.addEventListener('close', () => {
@@ -86,8 +86,9 @@ menu.addEventListener('click', (e) => {
 // Title: "BOUNCE BEATS" in frozen balls. On start, a wave sweeps left to right:
 // each ball hops and falls away while the title plays a rising arpeggio.
 // Balls in the same column move together, so the two rows never cross.
-const title = { waiting: [], x0: 0, x1: 0, notesPlayed: 0 };
-{
+// A shared link skips it and opens straight on the scene.
+const title = { waiting: [], x0: 0, x1: 0, notesPlayed: shared ? INTRO_NOTES.length : 0 };
+if (!shared) {
     const { w, h } = world;
     const { balls, radius } = titleBalls('BOUNCE\nBEATS', w / 2, h / 2 - 40, w);
     title.waiting = balls.map((p) => Object.assign(addBall(p.x, p.y, radius), { frozen: true }));

@@ -190,15 +190,17 @@ function save() {
 }
 
 // Restores a shared scene in the coordinates it was made in; the renderer scales
-// the view to fit this screen.
+// the view to fit this screen. Returns whether a scene was loaded.
 export function load() {
     try {
-        if (location.hash.length < 2) return;
+        if (location.hash.length < 2) return false;
         const { size, lines, spawners } = decode(location.hash.slice(1));
         Object.assign(world, { w: size[0] * GRID, h: size[1] * GRID, fixed: true });
         apply([lines.map((l) => l.map((v) => v * GRID)), spawners.map(([x, y, t]) => [x * GRID, y * GRID, t * TEMPO_STEP])]);
+        return true;
     } catch {
         history.replaceState(null, '', location.pathname);
+        return false;
     }
 }
 
