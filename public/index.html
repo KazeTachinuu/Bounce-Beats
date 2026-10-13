@@ -313,7 +313,8 @@
         #sound h2 { font-size: var(--t-body); font-weight: 600; }
 
         .chips {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
             gap: 2px;
             margin-top: var(--s-1);
             padding: 2px;
@@ -321,9 +322,10 @@
             background: rgb(255 255 255 / .05);
         }
         .scales { margin-top: var(--s0); }
+        .instruments { grid-template-columns: repeat(4, 1fr); }
         .chips button {
-            flex: 1;
             min-height: 30px;
+            white-space: nowrap;
             border-radius: calc(var(--s-1) - 2px);
             font-size: var(--t-small);
             color: var(--muted);
@@ -421,7 +423,7 @@
 
     <section id="sound" class="glass" popover aria-labelledby="sound-title">
         <h2 id="sound-title">Sound</h2>
-        <div class="chips scales" role="group" aria-label="Scale"></div>
+        <div class="chips scales" role="group" aria-label="Theme"></div>
         <div class="chips instruments" role="group" aria-label="Instrument"></div>
         <div class="bars" aria-label="Note volumes"></div>
     </section>
