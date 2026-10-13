@@ -53,6 +53,9 @@ export function noteFor(length) {
     return best;
 }
 
+// The exact line length that plays `note` (the inverse of noteFor).
+export const lengthFor = (note) => (LONGEST_LINE * hz(NOTES[0][1])) / hz(note[1]);
+
 // ---- equal loudness, ISO 226:2003 ----
 // SPL a pure tone needs to sound as loud as `phon` (a 1 kHz tone at `phon` dB).
 // Table rows 100 Hz .. 2 kHz, interpolated on a log-frequency axis.

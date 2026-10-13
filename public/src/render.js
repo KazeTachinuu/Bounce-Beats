@@ -1,5 +1,5 @@
 import { scene, world, handles, DEFAULT_INTERVAL } from './scene.js';
-import { ui, selectionBox, HOLD_MS } from './input.js';
+import { ui, selectionBox, brushLine, HOLD_MS, GRID } from './input.js';
 import { noteFor, NOTES } from './audio.js';
 import { BALL_RADIUS } from './physics.js';
 
@@ -57,15 +57,18 @@ export function draw(now) {
     ctx.lineCap = 'round';
 
     const { selection, hover, gesture, pointer } = ui;
+    if (ui.snap && SNAPPING.has(gesture?.kind)) gridDots();
     for (const l of scene.lines) {
         line(l, l === hover.line && !gesture, selection.anchor && selection.lines.includes(l));
     }
+    noteNames();
 
     const box = selectionBox();
     if (gesture?.kind === 'area') area(gesture, now);
     if (box) selectionFrame(box, selection, now);
-    if (gesture?.kind === 'draw') preview(gesture, now);
+    if (gesture?.kind === 'draw' || gesture?.kind === 'stamp') preview(gesture, now);
     if (gesture?.kind === 'pending') charge(gesture, now);
+    if (ui.brush && !gesture && !hover.line && !hover.spawner && pointer.x >= 0) ghost(pointer);
 
     flashFrame();
     balls();
@@ -105,6 +108,42 @@ function line(l, hovered = false, selected = false) {
     }
     if (hovered) stroke(l, 'rgb(255 255 255 / .2)', 9);
     stroke(l, '#fff', 3);
+}
+
+const SNAPPING = new Set(['draw', 'stamp', 'line', 'spawner', 'move']);
+
+// Faint dots on the snap grid, over the visible part of the world.
+function gridDots() {
+    const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(view.w, view.h);
+    const r = px(1);
+    ctx.fillStyle = 'rgb(255 255 255 / .12)';
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / GRID) * GRID; x <= x1; x += GRID) {
+        for (let y = Math.ceil(y0 / GRID) * GRID; y <= y1; y += GRID) {
+            ctx.moveTo(x + r, y);
+            ctx.arc(x, y, r, 0, TAU);
+        }
+    }
+    ctx.fill();
+}
+
+// Each line's note in small grey type, just above its middle.
+function noteNames() {
+    for (const l of scene.lines) {
+        const note = noteFor(Math.hypot(l.x2 - l.x1, l.y2 - l.y1));
+        onScreen((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2, (x, y) => {
+            ctx.font = `500 10px ${MONO}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillStyle = 'rgb(255 255 255 / .4)';
+            ctx.fillText(note[0], x, y - 8);
+        });
+    }
+}
+
+// Where the armed note's line would go, following the pointer.
+function ghost({ x, y }) {
+    stroke(brushLine(x, y), `hsl(${hueFor(ui.brush)} 80% 70% / .35)`, 3);
 }
 
 function preview(d, now) {

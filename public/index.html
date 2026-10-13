@@ -26,6 +26,7 @@
     <link rel="modulepreload" href="src/render.js">
     <link rel="modulepreload" href="src/intro.js">
     <link rel="modulepreload" href="src/mixer.js">
+    <link rel="modulepreload" href="src/notes.js">
     <style>
         /* Scale: phi = 1.618. Space and type step by phi (sqrt(phi) for in-between sizes). */
         :root {
@@ -150,7 +151,58 @@
             border-radius: 50%;
             transition: scale var(--fast) var(--ease);
         }
-        #menu-button:active, #mixer-button:active { scale: .9; }
+        #menu-button:active, #mixer-button:active, #notes-button:active { scale: .9; }
+        #notes-button {
+            position: fixed;
+            right: calc(var(--s1) + 2 * (var(--tap) + var(--s-1)) + env(safe-area-inset-right));
+            bottom: calc(var(--s1) + env(safe-area-inset-bottom));
+            display: grid;
+            place-items: center;
+            width: var(--tap);
+            height: var(--tap);
+            border-radius: 50%;
+            transition: scale var(--fast) var(--ease), color var(--fast) var(--ease);
+        }
+        #notes-button .i { width: 18px; height: 18px; opacity: .9; }
+        #notes-button[aria-pressed="true"] { color: var(--accent); }
+
+        /* Note brush: a pill of the scale's notes above the buttons. */
+        #notes {
+            position: fixed;
+            right: calc(var(--s1) + env(safe-area-inset-right));
+            bottom: calc(var(--s1) + var(--tap) + var(--s-1) + env(safe-area-inset-bottom));
+            display: flex;
+            gap: 2px;
+            max-width: calc(100vw - 2 * var(--s1));
+            padding: 4px;
+            border-radius: 99px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        #notes button {
+            flex: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            min-height: 32px;
+            padding: 0 10px;
+            border-radius: 99px;
+            font: 500 11px var(--mono);
+            color: var(--muted);
+            transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+        }
+        #notes button::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: hsl(var(--h) 80% 66%);
+        }
+        #notes button:hover { color: var(--fg); background: var(--hover); }
+        #notes button[aria-pressed="true"] { background: hsl(var(--h) 80% 66%); color: #000; }
+        #notes button[aria-pressed="true"]::before { background: #000; }
+        @media (pointer: coarse) { #notes button { min-height: 40px; } }
+        body:has(#notes:not([hidden])) #tips { opacity: 0; }
         #mixer-button {
             position: fixed;
             right: calc(var(--s1) + var(--tap) + var(--s-1) + env(safe-area-inset-right));
@@ -438,6 +490,10 @@
         <p id="tips">
             <span>drag to draw</span><span><span class="fine">click</span><span class="coarse">tap</span> to drop</span><span>hold for a spawner</span>
         </p>
+        <button id="notes-button" class="glass" aria-label="Note brush" aria-pressed="false">
+            <svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </button>
+        <div id="notes" class="glass" role="toolbar" aria-label="Pick a note, then tap to place its line" hidden></div>
         <button id="mixer-button" class="glass round" popovertarget="mixer" aria-label="Music">
             <svg class="i" viewBox="0 0 24 24"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
         </button>
@@ -480,6 +536,7 @@
             <li class="row"><span>Move anything</span><kbd>Drag it</kbd></li>
             <li class="row fine"><span>Spawner tempo</span><kbd>Scroll</kbd></li>
             <li class="row fine"><span>Select an area</span><kbd>Shift+Drag</kbd></li>
+            <li class="row fine"><span>Place freely</span><kbd>Alt+Drag</kbd></li>
         </ul>
         <hr>
         <div class="pair">
@@ -500,6 +557,10 @@
         <button class="row" data-action="stats" aria-pressed="false">
             <svg class="i" viewBox="0 0 20 20"><path d="M5 15v-4M10 15V5M15 15V8"/></svg>
             <span>Stats</span><kbd class="fine">T</kbd>
+        </button>
+        <button class="row" data-action="notes">
+            <svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span>Note brush</span><kbd class="fine">N</kbd>
         </button>
         <button class="row" data-action="mixer">
             <svg class="i" viewBox="0 0 24 24"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>

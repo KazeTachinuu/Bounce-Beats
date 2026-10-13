@@ -5,6 +5,7 @@ export const BALL_RADIUS = 8;
 const GRAVITY = 2000;        // px/s^2
 const MAX_SPEED = 2400;      // px/s, keeps a step (10px) well under the contact distance
 const LINE_HALF_WIDTH = 6;
+const RESTITUTION = 0.9;     // a little energy is lost per bounce, so balls roll on instead of bouncing in place
 const STEP = 1 / 240;
 const MAX_STEPS = 8;
 
@@ -47,8 +48,8 @@ function collide(b, line, onHit) {
 
     const vn = b.vx * nx + b.vy * ny;
     if (vn >= 0) return;
-    b.vx -= 2 * vn * nx;
-    b.vy -= 2 * vn * ny;
+    b.vx -= (1 + RESTITUTION) * vn * nx;
+    b.vy -= (1 + RESTITUTION) * vn * ny;
     // Report the normal impact speed: a ball sliding along a line stays quiet.
     onHit(b, line, -vn);
 }

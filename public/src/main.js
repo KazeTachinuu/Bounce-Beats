@@ -5,6 +5,7 @@ import * as render from './render.js';
 import { initInput, ui, select, selectionBox, deleteSelection, cursor } from './input.js';
 import { titleBalls } from './intro.js';
 import { initMixer } from './mixer.js';
+import { initNotes } from './notes.js';
 
 const HIT_COOLDOWN_MS = 70;
 const MIN_SOUND_SPEED = 72;   // px/s of normal impact
@@ -37,7 +38,10 @@ const actions = {
     undo: () => undo() && select(),
     redo: () => redo() && select(),
     delete: () => deleteSelection() || actions.clearAll(),
-    deselect: () => select(),
+    deselect: () => {
+        select();
+        notes.disarm();
+    },
     clearAll() {
         if (!scene.lines.length && !scene.spawners.length) return;
         menu.hidePopover();
@@ -56,6 +60,7 @@ const actions = {
     },
     menu: () => menu.togglePopover(),
     mixer: () => $('mixer').togglePopover(),
+    notes: () => notes.toggle(),
     async share() {
         const url = location.href;
         if (navigator.share && matchMedia('(pointer: coarse)').matches) return navigator.share({ title: document.title, url }).catch(() => {});
@@ -75,7 +80,8 @@ if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
 
 render.init(canvas);
 const shared = load();
-const mixer = initMixer($('mixer'));
+const notes = initNotes($('notes'), $('notes-button'));
+const mixer = initMixer($('mixer'), { onScale: () => notes.refresh() });
 initInput(canvas, game);
 deleteButton.addEventListener('click', deleteSelection);
 confirmClear.addEventListener('close', () => {

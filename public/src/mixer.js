@@ -7,7 +7,7 @@ const VOLUME_KEY = 'bounce-beats-volume';
 // The Music panel: scale chips, key picker, one LED-style level bar per note, and the
 // master volume. Bars can be painted by dragging across them; each change plays the
 // note so you hear what you set.
-export function initMixer(panel) {
+export function initMixer(panel, { onScale } = {}) {
     const scales = panel.querySelector('.scales');
     const key = panel.querySelector('.key select');
     const bars = panel.querySelector('.bars');
@@ -111,6 +111,7 @@ export function initMixer(panel) {
         unlock();
         setScale(scale, newKey);
         render();
+        onScale?.();
         save();
         // A quick rising figure so the new scale is heard right away.
         const octave = SCALES[scale][1].length;
