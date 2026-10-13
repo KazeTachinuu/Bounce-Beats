@@ -4,6 +4,7 @@ import { play, noteFor, NOTES, SCALES, music, setScale } from './audio.js';
 import * as render from './render.js';
 import { initInput, ui, select, selectionBox, deleteSelection, cursor } from './input.js';
 import { titleBalls } from './intro.js';
+import { initSound } from './sound.js';
 
 const HIT_COOLDOWN_MS = 70;
 const MIN_SOUND_SPEED = 72;   // px/s of normal impact
@@ -54,10 +55,12 @@ const actions = {
         toggled('stats', !stats.hidden);
     },
     menu: () => menu.togglePopover(),
-    // One switch changes the mood: the next scale, its name fading in, and a short
-    // rising phrase in it. Every line keeps its length and plays the new scale.
+    sound: () => $('sound').togglePopover(),
+    // S switches the mood: the next scale, its name fading in, and a short rising
+    // phrase in it. Every line keeps its length and plays the new scale.
     scale() {
         setScale((music.scale + 1) % SCALES.length);
+        sound.refresh();
         save();
         const name = $('scale-name');
         name.textContent = SCALES[music.scale][0];
@@ -85,9 +88,9 @@ if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
 
 render.init(canvas);
 const shared = load();
+const sound = initSound($('sound'));
 initInput(canvas, game);
 deleteButton.addEventListener('click', deleteSelection);
-$('scale-button').addEventListener('click', () => actions.scale());
 confirmClear.addEventListener('close', () => {
     if (confirmClear.returnValue === 'clear') edit(clearAll);
 });
@@ -132,6 +135,7 @@ function onHit(ball, line, speed) {
 
     const note = noteFor(Math.hypot(line.x2 - line.x1, line.y2 - line.y1));
     play(note, speed, pan);
+    sound.pulse(note, Math.min(speed / 1200, 1));
     line.glow = Math.min((line.glow ?? 0) + speed / 1200, 1);
     line.hue = render.hueFor(note);
     render.flash(ball.x, ball.y, Math.min(speed / 1920, 1));

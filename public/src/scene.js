@@ -1,5 +1,5 @@
 import { BALL_RADIUS, distToSegment } from './physics.js';
-import { music, setScale, SCALES } from './audio.js';
+import { music, setScale, SCALES, INSTRUMENTS, LEVELS } from './audio.js';
 
 export const DEFAULT_INTERVAL = 1500;
 const MIN_LINE_LENGTH = 50;
@@ -82,7 +82,8 @@ function restore(json) {
 //   (the self-delimiting integer code H.264 uses): small values take few bits;
 // - the encoder tries every code order k and keeps the shortest result.
 // Layout: k(4 bits) worldW worldH lineCount spawnerCount, lines, spawners, then a
-// scale flag: 0 for the default scale (one bit), else 1 and the scale number.
+// sound flag: 0 for the default sound (one bit), else 1, the scale, the instrument
+// and each note's level (as LEVELS - level, so a full level costs one bit).
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const GRID = 2;            // px
@@ -148,8 +149,12 @@ function encodeWith(k, [w, h], lines, spawners) {
         out.se(x - px, k); out.se(y - py, k); out.se(tempo - DEFAULT_INTERVAL / TEMPO_STEP, 2);
         [px, py] = [x, y];
     }
-    out.raw(music.scale ? 1 : 0, 1);
-    if (music.scale) out.ue(music.scale, 0);
+    out.raw(customSound() ? 1 : 0, 1);
+    if (customSound()) {
+        out.ue(music.scale, 0);
+        out.ue(music.instrument, 0);
+        for (const level of music.levels) out.ue(LEVELS - level, 0);
+    }
     return out;
 }
 
@@ -196,14 +201,22 @@ function decode(code) {
         spawners.push(inWorld([x, y, tempo], 2));
         [px, py] = [x, y];
     }
-    const scale = r.raw(1) ? r.ue(0) : 0;
-    if (scale >= SCALES.length) throw new Error('Bad scene link');
-    return { size, lines, spawners, scale };
+    let sound = null;
+    if (r.raw(1)) {
+        const scale = r.ue(0), instrument = r.ue(0);
+        if (scale >= SCALES.length || instrument >= INSTRUMENTS.length) throw new Error('Bad scene link');
+        const levels = Array.from({ length: SCALES[scale][1].length * 3 + 1 }, () => LEVELS - r.ue(0));
+        if (levels.some((level) => level < 0)) throw new Error('Bad scene link');
+        sound = { scale, instrument, levels };
+    }
+    return { size, lines, spawners, sound };
 }
+
+const customSound = () => music.scale || music.instrument || music.levels.some((level) => level !== LEVELS);
 
 export function save() {
     const [lines, spawners] = state();
-    if (!lines.length && !spawners.length && !music.scale) return history.replaceState(null, '', location.pathname);
+    if (!lines.length && !spawners.length && !customSound()) return history.replaceState(null, '', location.pathname);
     const q = (v) => Math.round(v / GRID);
     const code = encode(
         // Rounded down so the same screen reopens at exactly 1:1.
@@ -219,8 +232,11 @@ export function save() {
 export function load() {
     try {
         if (location.hash.length < 2) return false;
-        const { size, lines, spawners, scale } = decode(location.hash.slice(1));
-        setScale(scale);
+        const { size, lines, spawners, sound } = decode(location.hash.slice(1));
+        if (sound) {
+            setScale(sound.scale);
+            Object.assign(music, { instrument: sound.instrument, levels: sound.levels });
+        }
         Object.assign(world, { w: size[0] * GRID, h: size[1] * GRID, fixed: true });
         apply([lines.map((l) => l.map((v) => v * GRID)), spawners.map(([x, y, t]) => [x * GRID, y * GRID, t * TEMPO_STEP])]);
         return true;

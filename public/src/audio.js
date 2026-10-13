@@ -1,44 +1,51 @@
 // ---- scale ----
-// A line's length picks a scale step (the 1st, 2nd, 3rd... note of the scale),
-// spaced evenly on a log scale like frets on a string: longer is lower. The scale
-// decides what each step sounds like, so switching scale replays the same melody
-// in a new mood.
+// A line's length works like a string: half the length is exactly one octave up,
+// in every scale. Within an octave, the scale's notes sit at evenly spaced lengths,
+// like frets. The scale decides what each fret sounds like, so switching scale
+// replays the same shapes in a new mood.
 
 export const SCALES = [
-    ['Pentatonic', [0, 3, 5, 7, 10]],
+    ['Pentatonic', [0, 3, 5, 7, 10]],      // minor pentatonic
     ['Major', [0, 2, 4, 5, 7, 9, 11]],
-    ['Minor', [0, 2, 3, 5, 7, 8, 10]],
-    ['Blues', [0, 3, 5, 6, 7, 10]],
-    ['Japanese', [0, 2, 3, 7, 8]],
+    ['Minor', [0, 2, 3, 5, 7, 8, 10]],     // natural minor
+    ['Blues', [0, 3, 5, 6, 7, 10]],        // minor pentatonic plus the flat 5th
+    ['Hirajoshi', [0, 2, 3, 7, 8]],        // a Japanese pentatonic
 ];
-const ROOT = 45;           // A2
-const STEPS = 16;          // three octaves of the pentatonic scale
-const OCTAVES = 3;         // across the line lengths below
-const LONGEST_LINE = 1200; // px, the lowest step; 150px is the highest
+const ROOT = 45;           // A2, in 12-tone equal temperament, A4 = 440 Hz
+const OCTAVES = 3;
+const LONGEST_LINE = 1200; // px, the lowest note; each halving is an octave up
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-export const music = { scale: 0 };
-export let NOTES = [];  // [name, midi] for each step, low to high
+export const LEVELS = 8;  // per-note volume steps of 4 dB; 0 mutes
+export const music = { scale: 0, instrument: 0, levels: [] };
+export let NOTES = [];  // [name, midi, exact line length], low to high
 
 export function setScale(scale) {
     music.scale = scale;
     const intervals = SCALES[scale][1];
-    NOTES = Array.from({ length: STEPS }, (_, step) => {
-        const midi = ROOT + 12 * Math.floor(step / intervals.length) + intervals[step % intervals.length];
-        return [NAMES[midi % 12] + (Math.floor(midi / 12) - 1), midi];
-    });
+    const notes = [];
+    for (let octave = 0; octave < OCTAVES; octave++) {
+        intervals.forEach((interval, degree) => notes.push([ROOT + 12 * octave + interval, octave + degree / intervals.length]));
+    }
+    notes.push([ROOT + 12 * OCTAVES, OCTAVES]);
+    NOTES = notes.map(([midi, position]) => [NAMES[midi % 12] + (Math.floor(midi / 12) - 1), midi, LONGEST_LINE * 2 ** -position]);
+    music.levels = NOTES.map((_, i) => music.levels[i] ?? LEVELS);
 }
+
+const levelGain = (level) => (level ? 10 ** (((level - LEVELS) * 4) / 20) : 0);
 setScale(0);
 
-const stepFor = (length) =>
-    Math.max(0, Math.min(STEPS - 1, Math.round(((STEPS - 1) * Math.log2(LONGEST_LINE / Math.max(length, 1))) / OCTAVES)));
+export function noteFor(length) {
+    const degrees = SCALES[music.scale][1].length;
+    const position = Math.log2(LONGEST_LINE / Math.max(length, 1));  // octaves above the root
+    const index = Math.round(position * degrees);
+    return NOTES[Math.max(0, Math.min(NOTES.length - 1, index))];
+}
 
-export const noteFor = (length) => NOTES[stepFor(length)];
+// The exact line length that plays `note` (the inverse of noteFor).
+export const lengthFor = (note) => note[2];
 
-// The exact line length for a note's step (the inverse of noteFor).
-export const lengthFor = (note) => LONGEST_LINE * 2 ** ((-OCTAVES * NOTES.indexOf(note)) / (STEPS - 1));
-
-const LISTENING_PHON = 70;      // assumed listening level for loudness compensation
+const LISTENING_PHON = 80;      // assumed listening level (normal volume) for loudness compensation
 const MAX_VOICES = 16;
 const VOLUME = 0.1;
 
@@ -69,6 +76,7 @@ const loudness = (f) => 10 ** ((equalLoudnessSpl(f, LISTENING_PHON) - REFERENCE_
 
 // ---- engine ----
 
+export const INSTRUMENTS = ['Marimba', 'Bell', 'Pluck'];
 let ctx, input, click, voices = 0;
 
 // Must run inside a user gesture: browsers keep audio locked until then.
@@ -91,16 +99,21 @@ export function unlock() {
     input.connect(preDelay).connect(reverb).connect(new GainNode(ctx, { gain: 0.3 })).connect(limiter);
 }
 
-// A soft mallet note, modelled on a marimba bar: a sine fundamental, the bar's
-// first overtone (tuned two octaves up, so it stays musical), and a short
-// filtered-noise strike. Each partial is loudness-compensated at its own frequency.
+// One struck note on the current instrument. Every partial is loudness-compensated
+// at its own frequency (ISO 226), so all notes sound equally loud.
+//  Marimba: sine fundamental, the bar's first overtone (tuned two octaves up) and a
+//           short filtered-noise strike.
+//  Bell:    the partials of a free metal bar, as in a glockenspiel (1 : 2.756 : 5.404),
+//           with a long ring.
+//  Pluck:   a bright sawtooth through a lowpass that closes fast, like a plucked string.
 export function play(note, impactSpeed, pan = 0) {
-    if (ctx?.state !== 'running' || voices >= MAX_VOICES) return;
+    const mix = levelGain(music.levels[NOTES.indexOf(note)] ?? LEVELS);
+    if (ctx?.state !== 'running' || voices >= MAX_VOICES || !mix) return;
     const midi = note[1];
 
     const f = hz(midi);
     const hit = Math.min(Math.sqrt(impactSpeed / 2400), 1);           // 0..1
-    const peak = VOLUME * (0.3 + 0.7 * hit);
+    const peak = VOLUME * mix * (0.3 + 0.7 * hit);
     const ring = 0.2 + (81 - midi) / 120;                              // decay time constant, low notes longer
     const t = ctx.currentTime;
 
@@ -121,11 +134,29 @@ export function play(note, impactSpeed, pan = 0) {
     };
     const sine = (freq) => new OscillatorNode(ctx, { frequency: freq, detune: (Math.random() - 0.5) * 4 });
 
-    const body = strike(sine(f), peak * loudness(f), ring);
-    strike(sine(f * 4), peak * 0.12 * hit * loudness(f * 4), ring * 0.12);
-    const noise = new AudioBufferSourceNode(ctx, { buffer: click });
-    const band = new BiquadFilterNode(ctx, { type: 'bandpass', frequency: Math.min(f * 8, 4000), Q: 1.2 });
-    strike(noise, peak * 0.35 * hit, 0.004, noise.connect(band));
+    const tick = (gain) => {
+        const noise = new AudioBufferSourceNode(ctx, { buffer: click });
+        const band = new BiquadFilterNode(ctx, { type: 'bandpass', frequency: Math.min(f * 8, 4000), Q: 1.2 });
+        strike(noise, gain, 0.004, noise.connect(band));
+    };
+
+    let body;
+    if (music.instrument === 1) {
+        body = strike(sine(f), peak * 0.8 * loudness(f), ring * 2.5);
+        strike(sine(f * 2.756), peak * 0.35 * loudness(f * 2.756), ring * 1.1);
+        strike(sine(f * 5.404), peak * 0.18 * hit * loudness(f * 5.404), ring * 0.4);
+        tick(peak * 0.15 * hit);
+    } else if (music.instrument === 2) {
+        const saw = new OscillatorNode(ctx, { type: 'sawtooth', frequency: f, detune: (Math.random() - 0.5) * 4 });
+        const tone = new BiquadFilterNode(ctx, { type: 'lowpass', Q: 2 });
+        tone.frequency.setValueAtTime(Math.min(f * (4 + 8 * hit), 9000), t);
+        tone.frequency.setTargetAtTime(f * 1.5, t, 0.06 + ring * 0.1);
+        body = strike(saw, peak * 0.45 * loudness(f), ring * 0.9, saw.connect(tone));
+    } else {
+        body = strike(sine(f), peak * loudness(f), ring);
+        strike(sine(f * 4), peak * 0.12 * hit * loudness(f * 4), ring * 0.12);
+        tick(peak * 0.35 * hit);
+    }
 
     voices++;
     body.onended = () => {
