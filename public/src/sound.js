@@ -94,6 +94,7 @@ export function initSound(panel) {
             bar.tabIndex = 0;
             bar.role = 'slider';
             bar.ariaLabel = note[0];
+            bar.title = note[0];
             bar.ariaValueMin = 0;
             bar.ariaValueMax = LEVELS;
             bar.style.setProperty('--h', hueFor(note));
