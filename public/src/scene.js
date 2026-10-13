@@ -91,6 +91,7 @@ const TEMPO_STEP = 50;     // ms, the scroll-wheel step
 const MAX_WORLD = 8192;    // px
 const MAX_LINES = 2000;
 const MAX_SPAWNERS = 200;
+const MIN_TEMPO = 100 / TEMPO_STEP, MAX_TEMPO = 5000 / TEMPO_STEP;  // the scroll-wheel range
 
 function bitWriter() {
     const bits = [];
@@ -126,9 +127,10 @@ function bitReader(code) {
     const ue = (k) => {
         let n = 0;
         while (!bit()) if (++n > 24) throw new Error('Bad scene link');
-        return ((((1 << n) | raw(n)) - 1) << k) | raw(k);
+        // Plain arithmetic, not bitwise ops: 32-bit shifts would overflow into garbage.
+        return (2 ** n + raw(n) - 1) * 2 ** k + raw(k);
     };
-    const se = (k) => { const u = ue(k); return u & 1 ? (u + 1) / 2 : -u / 2; };
+    const se = (k) => { const u = ue(k); return u % 2 ? (u + 1) / 2 : -u / 2; };
     return { raw, ue, se };
 }
 
@@ -168,6 +170,13 @@ function encode(size, lines, spawners) {
     return best.text();
 }
 
+// Positions may sit a little outside the world, but not absurdly far.
+const REACH = (2 * MAX_WORLD) / GRID;
+function inWorld(values, count = values.length) {
+    if (values.slice(0, count).some((v) => Math.abs(v) > REACH)) throw new Error('Bad scene link');
+    return values;
+}
+
 function decode(code) {
     const r = bitReader(code);
     const k = r.raw(4);
@@ -181,13 +190,15 @@ function decode(code) {
     let px = 0, py = 0;
     for (let i = 0; i < lineCount; i++) {
         const x1 = px + r.se(k), y1 = py + r.se(k);
-        lines.push([x1, y1, x1 + r.ue(k), y1 + r.se(k)]);
+        lines.push(inWorld([x1, y1, x1 + r.ue(k), y1 + r.se(k)]));
         [px, py] = [x1, y1];
     }
     px = py = 0;
     for (let i = 0; i < spawnerCount; i++) {
         const x = px + r.se(k), y = py + r.se(k);
-        spawners.push([x, y, DEFAULT_INTERVAL / TEMPO_STEP + r.se(2)]);
+        const tempo = DEFAULT_INTERVAL / TEMPO_STEP + r.se(2);
+        if (tempo < MIN_TEMPO || tempo > MAX_TEMPO) throw new Error('Bad scene link');
+        spawners.push(inWorld([x, y, tempo], 2));
         [px, py] = [x, y];
     }
     let mix = null;
@@ -195,7 +206,9 @@ function decode(code) {
         const scale = r.ue(0), key = r.raw(4);
         if (scale >= SCALES.length || key >= KEYS.length) throw new Error('Bad scene link');
         const count = SCALES[scale][1].length * 3 + 1;
-        mix = { scale, key, levels: Array.from({ length: count }, () => Math.max(0, LEVELS - r.ue(0))) };
+        const levels = Array.from({ length: count }, () => LEVELS - r.ue(0));
+        if (levels.some((level) => level < 0)) throw new Error('Bad scene link');
+        mix = { scale, key, levels };
     }
     return { size, lines, spawners, mix };
 }
