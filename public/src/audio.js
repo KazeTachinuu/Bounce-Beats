@@ -1,6 +1,8 @@
 // ---- scale ----
-// Lines play notes of the chosen scale over three octaves, rooted on A. Any scale
-// here sounds good in any combination, so the music can't go wrong.
+// A line's length picks a scale step (the 1st, 2nd, 3rd... note of the scale),
+// spaced evenly on a log scale like frets on a string: longer is lower. The scale
+// decides what each step sounds like, so switching scale replays the same melody
+// in a new mood.
 
 export const SCALES = [
     ['Pentatonic', [0, 3, 5, 7, 10]],
@@ -9,39 +11,38 @@ export const SCALES = [
     ['Blues', [0, 3, 5, 6, 7, 10]],
     ['Japanese', [0, 2, 3, 7, 8]],
 ];
-const ROOT = 45; // A2
+const ROOT = 45;           // A2
+const STEPS = 16;          // three octaves of the pentatonic scale
+const OCTAVES = 3;         // across the line lengths below
+const LONGEST_LINE = 1200; // px, the lowest step; 150px is the highest
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 export const music = { scale: 0 };
-export let NOTES = [];  // [name, midi], low to high
+export let NOTES = [];  // [name, midi] for each step, low to high
 
 export function setScale(scale) {
     music.scale = scale;
-    const midis = [];
-    for (let octave = 0; octave < 3; octave++) for (const step of SCALES[scale][1]) midis.push(ROOT + 12 * octave + step);
-    midis.push(ROOT + 36);
-    NOTES = midis.map((midi) => [NAMES[midi % 12] + (Math.floor(midi / 12) - 1), midi]);
+    const intervals = SCALES[scale][1];
+    NOTES = Array.from({ length: STEPS }, (_, step) => {
+        const midi = ROOT + 12 * Math.floor(step / intervals.length) + intervals[step % intervals.length];
+        return [NAMES[midi % 12] + (Math.floor(midi / 12) - 1), midi];
+    });
 }
 setScale(0);
 
-const LONGEST_LINE = 1200;      // px, plays the lowest note
+const stepFor = (length) =>
+    Math.max(0, Math.min(STEPS - 1, Math.round(((STEPS - 1) * Math.log2(LONGEST_LINE / Math.max(length, 1))) / OCTAVES)));
+
+export const noteFor = (length) => NOTES[stepFor(length)];
+
+// The exact line length for a note's step (the inverse of noteFor).
+export const lengthFor = (note) => LONGEST_LINE * 2 ** ((-OCTAVES * NOTES.indexOf(note)) / (STEPS - 1));
+
 const LISTENING_PHON = 70;      // assumed listening level for loudness compensation
 const MAX_VOICES = 16;
 const VOLUME = 0.1;
 
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
-
-// Like a string or a bar: frequency is inversely proportional to length.
-// The result is snapped to the nearest note of the scale.
-export function noteFor(length) {
-    const midi = 69 + 12 * Math.log2((hz(NOTES[0][1]) * LONGEST_LINE) / Math.max(length, 1) / 440);
-    let best = NOTES[0];
-    for (const note of NOTES) if (Math.abs(note[1] - midi) < Math.abs(best[1] - midi)) best = note;
-    return best;
-}
-
-// The exact line length that plays `note` (the inverse of noteFor).
-export const lengthFor = (note) => (LONGEST_LINE * hz(NOTES[0][1])) / hz(note[1]);
 
 // ---- equal loudness, ISO 226:2003 ----
 // SPL a pure tone needs to sound as loud as `phon` (a 1 kHz tone at `phon` dB).
