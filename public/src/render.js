@@ -115,6 +115,7 @@ const SNAPPING = new Set(['draw', 'stamp', 'line', 'spawner', 'move']);
 // Faint dots on the snap grid, over the visible part of the world.
 function gridDots() {
     const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(view.w, view.h);
+    if (((x1 - x0) / GRID) * ((y1 - y0) / GRID) > 20000) return;  // too zoomed out to be useful
     const r = px(1);
     ctx.fillStyle = 'rgb(255 255 255 / .12)';
     ctx.beginPath();

@@ -88,6 +88,9 @@ function restore(json) {
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const GRID = 2;            // px
 const TEMPO_STEP = 50;     // ms, the scroll-wheel step
+const MAX_WORLD = 8192;    // px
+const MAX_LINES = 2000;
+const MAX_SPAWNERS = 200;
 
 function bitWriter() {
     const bits = [];
@@ -170,6 +173,10 @@ function decode(code) {
     const k = r.raw(4);
     const size = [r.ue(6), r.ue(6)];
     const lineCount = r.ue(0), spawnerCount = r.ue(0);
+    // Links are untrusted input: refuse sizes and counts no real scene has.
+    if (Math.max(...size) * GRID > MAX_WORLD || lineCount > MAX_LINES || spawnerCount > MAX_SPAWNERS) {
+        throw new Error('Bad scene link');
+    }
     const lines = [], spawners = [];
     let px = 0, py = 0;
     for (let i = 0; i < lineCount; i++) {
