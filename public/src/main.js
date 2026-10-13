@@ -1,11 +1,9 @@
-import { scene, world, addBall, load, edit, clearAll, undo, redo } from './scene.js';
+import { scene, world, addBall, load, save, edit, clearAll, undo, redo } from './scene.js';
 import { step } from './physics.js';
-import { play, noteFor, NOTES } from './audio.js';
+import { play, noteFor, NOTES, SCALES, music, setScale } from './audio.js';
 import * as render from './render.js';
 import { initInput, ui, select, selectionBox, deleteSelection, cursor } from './input.js';
 import { titleBalls } from './intro.js';
-import { initMixer } from './mixer.js';
-import { initNotes } from './notes.js';
 
 const HIT_COOLDOWN_MS = 70;
 const MIN_SOUND_SPEED = 72;   // px/s of normal impact
@@ -38,10 +36,7 @@ const actions = {
     undo: () => undo() && select(),
     redo: () => redo() && select(),
     delete: () => deleteSelection() || actions.clearAll(),
-    deselect: () => {
-        select();
-        notes.disarm();
-    },
+    deselect: () => select(),
     clearAll() {
         if (!scene.lines.length && !scene.spawners.length) return;
         menu.hidePopover();
@@ -59,8 +54,18 @@ const actions = {
         toggled('stats', !stats.hidden);
     },
     menu: () => menu.togglePopover(),
-    mixer: () => $('mixer').togglePopover(),
-    notes: () => notes.toggle(),
+    // One switch changes the mood: the next scale, its name fading in, and a short
+    // rising phrase in it. Every line keeps its length and plays the new scale.
+    scale() {
+        setScale((music.scale + 1) % SCALES.length);
+        save();
+        const name = $('scale-name');
+        name.textContent = SCALES[music.scale][0];
+        name.getAnimations().forEach((a) => a.cancel());
+        name.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], 1600);
+        const octave = SCALES[music.scale][1].length;
+        [0, 2, 4, octave].forEach((i, n) => setTimeout(() => play(NOTES[i + octave], 900), n * 110));
+    },
     async share() {
         const url = location.href;
         if (navigator.share && matchMedia('(pointer: coarse)').matches) return navigator.share({ title: document.title, url }).catch(() => {});
@@ -80,10 +85,9 @@ if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
 
 render.init(canvas);
 const shared = load();
-const notes = initNotes($('notes'), $('notes-button'));
-const mixer = initMixer($('mixer'), { onScale: () => notes.refresh() });
 initInput(canvas, game);
 deleteButton.addEventListener('click', deleteSelection);
+$('scale-button').addEventListener('click', () => actions.scale());
 confirmClear.addEventListener('close', () => {
     if (confirmClear.returnValue === 'clear') edit(clearAll);
 });
@@ -128,7 +132,6 @@ function onHit(ball, line, speed) {
 
     const note = noteFor(Math.hypot(line.x2 - line.x1, line.y2 - line.y1));
     play(note, speed, pan);
-    mixer.pulse(note, Math.min(speed / 1200, 1));
     line.glow = Math.min((line.glow ?? 0) + speed / 1200, 1);
     line.hue = render.hueFor(note);
     render.flash(ball.x, ball.y, Math.min(speed / 1920, 1));

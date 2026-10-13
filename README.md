@@ -15,12 +15,7 @@ bun run deploy     # Cloudflare Pages
 - **Click** to drop a ball, **hold** to place a spawner, **scroll** on a spawner to change its tempo
 - **Drag** a line or spawner to move it, **click** it to select and delete it
 - **Shift + drag** to select an area, then move, resize or delete
-- **Note brush** (the note button, or **N**): pick a note, then tap to place a line that plays exactly it; drag to aim it
-- Line lengths snap to exact notes and positions to a light grid; hold **Alt** to place freely
+- **Scale** (the note button, or **S**): switch the mood between pentatonic, major, minor, blues and Japanese
 - **Cmd+Z / Shift+Cmd+Z** (Ctrl on Windows/Linux) undo / redo, **Space** pause, **C** clear, **X** clear balls, **T** stats, **M** menu
 
-## Music
-
-Open **Music** (the equalizer button, or **E**) to pick a scale and key, and set each note's level: drag across the bars to paint them, drag to the bottom to mute a note, double-click to reset. Bars light up as their notes play.
-
-Your scene, scale, key and mix are saved in the URL, so the link shares the whole song.
+Line lengths snap to exact notes, so everything is in tune. Your scene and scale are saved in the URL, so the link shares the whole song.

@@ -25,8 +25,6 @@
     <link rel="modulepreload" href="src/input.js">
     <link rel="modulepreload" href="src/render.js">
     <link rel="modulepreload" href="src/intro.js">
-    <link rel="modulepreload" href="src/mixer.js">
-    <link rel="modulepreload" href="src/notes.js">
     <style>
         /* Scale: phi = 1.618. Space and type step by phi (sqrt(phi) for in-between sizes). */
         :root {
@@ -151,59 +149,8 @@
             border-radius: 50%;
             transition: scale var(--fast) var(--ease);
         }
-        #menu-button:active, #mixer-button:active, #notes-button:active { scale: .9; }
-        #notes-button {
-            position: fixed;
-            right: calc(var(--s1) + 2 * (var(--tap) + var(--s-1)) + env(safe-area-inset-right));
-            bottom: calc(var(--s1) + env(safe-area-inset-bottom));
-            display: grid;
-            place-items: center;
-            width: var(--tap);
-            height: var(--tap);
-            border-radius: 50%;
-            transition: scale var(--fast) var(--ease), color var(--fast) var(--ease);
-        }
-        #notes-button .i { width: 18px; height: 18px; opacity: .9; }
-        #notes-button[aria-pressed="true"] { color: var(--accent); }
-
-        /* Note brush: a pill of the scale's notes above the buttons. */
-        #notes {
-            position: fixed;
-            right: calc(var(--s1) + env(safe-area-inset-right));
-            bottom: calc(var(--s1) + var(--tap) + var(--s-1) + env(safe-area-inset-bottom));
-            display: flex;
-            gap: 2px;
-            max-width: calc(100vw - 2 * var(--s1));
-            padding: 4px;
-            border-radius: 99px;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-        #notes button {
-            flex: none;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            min-height: 32px;
-            padding: 0 10px;
-            border-radius: 99px;
-            font: 500 11px var(--mono);
-            color: var(--muted);
-            transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
-        }
-        #notes button::before {
-            content: "";
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: hsl(var(--h) 80% 66%);
-        }
-        #notes button:hover { color: var(--fg); background: var(--hover); }
-        #notes button[aria-pressed="true"] { background: hsl(var(--h) 80% 66%); color: #000; }
-        #notes button[aria-pressed="true"]::before { background: #000; }
-        @media (pointer: coarse) { #notes button { min-height: 40px; } }
-        body:has(#notes:not([hidden])) #tips { opacity: 0; }
-        #mixer-button {
+        #menu-button:active, #scale-button:active { scale: .9; }
+        #scale-button {
             position: fixed;
             right: calc(var(--s1) + var(--tap) + var(--s-1) + env(safe-area-inset-right));
             bottom: calc(var(--s1) + env(safe-area-inset-bottom));
@@ -214,7 +161,20 @@
             border-radius: 50%;
             transition: scale var(--fast) var(--ease);
         }
-        #mixer-button .i { width: 18px; height: 18px; opacity: .9; }
+        #scale-button .i { width: 18px; height: 18px; opacity: .9; }
+
+        /* The scale's name, fading in briefly when it changes. */
+        #scale-name {
+            position: fixed;
+            inset: auto 0 calc(var(--s2) * 2.618 + env(safe-area-inset-bottom)) 0;
+            text-align: center;
+            font: var(--t-small) var(--mono);
+            letter-spacing: .3em;
+            text-transform: uppercase;
+            color: var(--fg);
+            opacity: 0;
+            pointer-events: none;
+        }
         #menu-button .i { width: 18px; height: 18px; opacity: .9; }
 
         #stats {
@@ -330,118 +290,6 @@
         button[aria-pressed="true"] kbd { color: var(--accent); opacity: .7; }
         button[data-action="clearAll"] { color: var(--danger); }
 
-        /* ---- music panel ---- */
-
-        #mixer {
-            inset: auto calc(var(--s1) + env(safe-area-inset-right)) calc(var(--s1) + var(--tap) + var(--s-1) + env(safe-area-inset-bottom)) auto;
-            margin: 0;
-            width: min(30rem, 100vw - 2 * var(--s1));
-            padding: var(--s0);
-            border: 0;
-            border-radius: var(--s0);
-            color: var(--fg);
-            transform-origin: bottom right;
-            opacity: 0;
-            scale: .96;
-            translate: 0 var(--s-2);
-            transition: opacity var(--fast) var(--ease), scale var(--fast) var(--ease), translate var(--fast) var(--ease),
-                overlay var(--fast) allow-discrete, display var(--fast) allow-discrete;
-        }
-        #mixer:popover-open { opacity: 1; scale: 1; translate: 0 0; }
-        @starting-style { #mixer:popover-open { opacity: 0; scale: .96; translate: 0 var(--s-2); } }
-
-        #mixer header { display: flex; align-items: center; justify-content: space-between; }
-        #mixer h2 { font-size: var(--t-body); font-weight: 600; }
-
-        .key { display: flex; align-items: center; gap: var(--s-1); font-size: var(--t-small); color: var(--muted); }
-        .key select {
-            appearance: none;
-            font: 500 var(--t-small) var(--mono);
-            color: var(--fg);
-            min-width: 4.5em;
-            padding: var(--s-2) var(--s1) var(--s-2) var(--s-1);
-            border: 0;
-            border-radius: var(--s-1);
-            background: rgb(255 255 255 / .08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='.6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center / 12px;
-            cursor: pointer;
-        }
-
-        .scales {
-            display: flex;
-            gap: 2px;
-            margin-top: var(--s0);
-            padding: 2px;
-            border-radius: var(--s-1);
-            background: rgb(255 255 255 / .05);
-        }
-        .scales button {
-            flex: 1;
-            min-height: 30px;
-            border-radius: calc(var(--s-1) - 2px);
-            font-size: var(--t-small);
-            color: var(--muted);
-            transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
-        }
-        .scales button:hover { color: var(--fg); }
-        .scales button[aria-pressed="true"] { background: rgb(255 255 255 / .14); color: var(--fg); }
-        @media (pointer: coarse) { .scales button { min-height: 36px; } }
-        @media (max-width: 480px) { .scales button { font-size: min(var(--t-small), 2.9vw); padding: 0 2px; } }
-
-        .bars {
-            display: grid;
-            grid-template-columns: repeat(var(--n), 1fr);
-            gap: 3px;
-            margin-top: var(--s1);
-            touch-action: none;
-            cursor: ns-resize;
-        }
-        .bar { display: grid; gap: var(--s-2); outline-offset: 3px; border-radius: 3px; }
-        .stack { display: flex; flex-direction: column-reverse; gap: 3px; }
-        .stack i {
-            height: 7px;
-            border-radius: 2px;
-            background: rgb(255 255 255 / .07);
-            transition: background var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-        }
-        .stack i.on { background: hsl(var(--h) 80% 66%); box-shadow: 0 0 6px hsl(var(--h) 80% 60% / .35); }
-        .bar small {
-            height: 1.2em;
-            font: 500 10px/1.2 var(--mono);
-            color: var(--muted);
-            text-align: center;
-            white-space: nowrap;
-        }
-
-        .volume { display: flex; align-items: center; gap: var(--s-1); margin-top: var(--s-1); color: var(--muted); }
-        .volume input {
-            --fill: rgb(255 255 255 / .85);
-            --rest: rgb(255 255 255 / .12);
-            flex: 1;
-            height: 24px;
-            appearance: none;
-            background: transparent;
-            cursor: pointer;
-        }
-        .volume input::-webkit-slider-runnable-track {
-            height: 4px;
-            border-radius: 2px;
-            background: linear-gradient(to right, var(--fill) var(--p, 100%), var(--rest) var(--p, 100%));
-        }
-        .volume input::-moz-range-track { height: 4px; border-radius: 2px; background: var(--rest); }
-        .volume input::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--fill); }
-        .volume input::-webkit-slider-thumb {
-            appearance: none;
-            width: 14px;
-            height: 14px;
-            margin-top: -5px;
-            border-radius: 50%;
-            background: #fff;
-            box-shadow: 0 1px 4px rgb(0 0 0 / .5);
-            transition: scale var(--fast) var(--ease);
-        }
-        .volume input::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
-        .volume input:active::-webkit-slider-thumb { scale: 1.2; }
-
         /* ---- confirmation ---- */
 
         #confirm-clear {
@@ -490,13 +338,10 @@
         <p id="tips">
             <span>drag to draw</span><span><span class="fine">click</span><span class="coarse">tap</span> to drop</span><span>hold for a spawner</span>
         </p>
-        <button id="notes-button" class="glass" aria-label="Note brush" aria-pressed="false">
+        <button id="scale-button" class="glass" aria-label="Change scale">
             <svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </button>
-        <div id="notes" class="glass" role="toolbar" aria-label="Pick a note, then tap to place its line" hidden></div>
-        <button id="mixer-button" class="glass round" popovertarget="mixer" aria-label="Music">
-            <svg class="i" viewBox="0 0 24 24"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
-        </button>
+        <p id="scale-name" aria-live="polite"></p>
         <button id="menu-button" class="glass" popovertarget="menu" aria-label="Menu">
             <svg class="i" viewBox="0 0 20 20"><path d="M4 7h12M4 13h12"/></svg>
         </button>
@@ -511,19 +356,6 @@
     <button id="delete" hidden>Delete</button>
     <div id="paused" hidden>PAUSED</div>
 
-    <section id="mixer" class="glass" popover aria-labelledby="mixer-title">
-        <header>
-            <h2 id="mixer-title">Music</h2>
-            <label class="key"><span>Key</span><select></select></label>
-        </header>
-        <div class="scales" role="group" aria-label="Scale"></div>
-        <div class="bars" aria-label="Note levels"></div>
-        <label class="volume">
-            <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.7"/></svg>
-            <input type="range" min="0" max="1" step="0.01" aria-label="Volume">
-        </label>
-    </section>
-
     <nav id="menu" class="glass" popover aria-label="Menu">
         <header>
             <h2>Bounce Beats</h2>
@@ -536,7 +368,6 @@
             <li class="row"><span>Move anything</span><kbd>Drag it</kbd></li>
             <li class="row fine"><span>Spawner tempo</span><kbd>Scroll</kbd></li>
             <li class="row fine"><span>Select an area</span><kbd>Shift+Drag</kbd></li>
-            <li class="row fine"><span>Place freely</span><kbd>Alt+Drag</kbd></li>
         </ul>
         <hr>
         <div class="pair">
@@ -558,13 +389,9 @@
             <svg class="i" viewBox="0 0 20 20"><path d="M5 15v-4M10 15V5M15 15V8"/></svg>
             <span>Stats</span><kbd class="fine">T</kbd>
         </button>
-        <button class="row" data-action="notes">
+        <button class="row" data-action="scale">
             <svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            <span>Note brush</span><kbd class="fine">N</kbd>
-        </button>
-        <button class="row" data-action="mixer">
-            <svg class="i" viewBox="0 0 24 24"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
-            <span>Music</span><kbd class="fine">E</kbd>
+            <span>Change scale</span><kbd class="fine">S</kbd>
         </button>
         <button class="row" data-action="share">
             <svg class="i" viewBox="0 0 20 20"><path d="M8.5 11.5l3-3"/><path d="m9.3 6.2.9-.9a3 3 0 0 1 4.3 4.3l-.9.9"/><path d="m10.7 13.8-.9.9a3 3 0 0 1-4.3-4.3l.9-.9"/></svg>
