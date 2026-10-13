@@ -69,7 +69,9 @@ export function draw(now) {
 
     flashFrame();
     balls();
-    for (const s of scene.spawners) spawner(s, s === hover.spawner && !gesture, now);
+    for (const s of scene.spawners) {
+        spawner(s, s === hover.spawner && !gesture, selection.anchor && selection.spawners.includes(s), now);
+    }
 
     const dragged = gesture?.line;
     if (dragged) {
@@ -185,14 +187,15 @@ function flashFrame() {
 
 // ---- spawners ----
 
-function spawner(s, hovered, now) {
+function spawner(s, hovered, selected, now) {
     const pulse = Math.sin(now / (300 * (s.interval / DEFAULT_INTERVAL))) * 0.2 + 0.8;
     const k = px(hovered ? 1.15 : 1);
     const hue = s.interval < 800 ? 0 : s.interval > 2500 ? 220 : 180;
     const ring = s.interval === DEFAULT_INTERVAL ? '255 255 255' : null;
 
     if (hovered) circle(s.x, s.y, 28 * k, 'rgb(255 255 255 / .15)');
-    ctx.strokeStyle = ring ? `rgb(${ring} / ${pulse * 0.7})` : `hsl(${hue} 70% 60% / ${pulse * 0.7})`;
+    if (selected) circle(s.x, s.y, 22 * k, 'rgb(255 80 80 / .25)');
+    ctx.strokeStyle = selected ? '#f66' : ring ? `rgb(${ring} / ${pulse * 0.7})` : `hsl(${hue} 70% 60% / ${pulse * 0.7})`;
     ctx.lineWidth = px(2);
     ctx.beginPath();
     ctx.arc(s.x, s.y, 16 * k, 0, TAU);

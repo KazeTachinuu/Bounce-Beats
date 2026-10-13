@@ -35,7 +35,7 @@ export function cursor() {
     if (gesture && gesture.kind !== 'pending' && gesture.kind !== 'draw' && gesture.kind !== 'area') return 'grabbing';
     if (hover.handle) return `${hover.handle.dir}-resize`;
     if (hover.endpoint || hover.line) return 'grab';
-    if (hover.spawner) return 'pointer';
+    if (hover.spawner) return 'grab';
     const box = selectionBox();
     if (box && inBox(box, pointer.x, pointer.y)) return 'grab';
     return 'crosshair';
@@ -43,6 +43,9 @@ export function cursor() {
 
 // Pointer distances are felt on screen: convert a screen distance to world units.
 const screen = (n) => n / camera.s;
+
+// The Delete button sits just above a selected spawner's ring.
+const spawnerAnchor = (s) => ({ x: s.x, y: s.y - screen(18) });
 
 const inBox = (b, x, y) => x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY;
 
@@ -122,9 +125,10 @@ function pick(x, y, shift) {
         return { kind: 'area', x1: x, y1: y, x2: x, y2: y };
     }
     if (hover.spawner) {
-        S.edit(() => S.remove({ lines: [], spawners: [hover.spawner] }));
-        hover.spawner = null;
-        return null;
+        // Press selects (Delete button appears); dragging moves it.
+        select([], [hover.spawner], spawnerAnchor(hover.spawner));
+        S.begin();
+        return { kind: 'spawner', spawner: hover.spawner };
     }
     const box = selectionBox();
     if (hover.handle) {
@@ -163,6 +167,10 @@ function drag(g, x, y, dx, dy) {
         case 'line':
             S.translate({ lines: [g.line], spawners: [] }, dx, dy);
             ui.selection.anchor = { x, y };
+            break;
+        case 'spawner':
+            S.translate({ lines: [], spawners: [g.spawner] }, dx, dy);
+            ui.selection.anchor = spawnerAnchor(g.spawner);
             break;
         case 'move':
             S.translate(ui.selection, dx, dy);
